@@ -1,0 +1,25 @@
+{
+  "operations": [
+    "retrieve", "memory.write", "memory.search", "memory.update", "memory.delete",
+    "feedback.write", "freshness.read"
+  ],
+  "corpora_by_purpose": {
+    "pricing-analysis": ["pricing", "product", "approved-decisions"],
+    "customer-support": ["product", "support", "approved-decisions"],
+    "memory-management": ["memory"]
+  },
+  "sources_by_purpose": {
+    "pricing-analysis": ["postgresql", "documents"],
+    "customer-support": ["postgresql", "documents"],
+    "memory-management": []
+  },
+  "classifications_by_entitlement": {
+    "pricing-analysis": ["public", "internal", "confidential"],
+    "customer-support": ["public", "internal", "confidential"],
+    "memory-management": ["memory"],
+    "restricted-data": ["restricted"]
+  },
+  "response_fields": [
+    "title", "content", "source", "validity", "trust_class", "lineage.content_hash"
+  ]
+}

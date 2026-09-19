@@ -1,0 +1,24 @@
+name: Bug report
+description: Report a reproducible defect using synthetic data.
+title: "bug: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Do not include credentials, production data, or security vulnerabilities. Use private vulnerability reporting for security issues.
+  - type: textarea
+    id: behavior
+    attributes: {label: Observed behavior, description: Include the exact error and user-visible impact.}
+    validations: {required: true}
+  - type: textarea
+    id: reproduction
+    attributes: {label: Minimal reproduction, description: Include commands and a synthetic fixture.}
+    validations: {required: true}
+  - type: textarea
+    id: expected
+    attributes: {label: Expected behavior}
+    validations: {required: true}
+  - type: input
+    id: revision
+    attributes: {label: Commit or version}
+    validations: {required: true}

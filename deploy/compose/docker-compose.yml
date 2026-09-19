@@ -1,0 +1,208 @@
+name: agentic-context-service
+
+# Local showcase only. OpenSearch security and TLS are intentionally disabled here.
+# Production deployments must enable authentication, TLS, private networking, and secrets storage.
+services:
+  postgres:
+    image: postgres:17.6-alpine
+    environment:
+      POSTGRES_USER: context
+      POSTGRES_PASSWORD: context-local-only
+      POSTGRES_DB: context
+    command: ["postgres", "-c", "wal_level=logical", "-c", "max_replication_slots=4", "-c", "max_wal_senders=4"]
+    ports: ["5432:5432"]
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ../../examples/retail-pricing/seed.sql:/docker-entrypoint-initdb.d/001-retail.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U context -d context"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  redpanda:
+    image: docker.redpanda.com/redpandadata/redpanda:v25.2.5
+    command:
+      - redpanda
+      - start
+      - --mode=dev-container
+      - --smp=1
+      - --memory=768M
+      - --reserve-memory=0M
+      - --overprovisioned
+      - --node-id=0
+      - --kafka-addr=internal://0.0.0.0:9092,external://0.0.0.0:19092
+      - --advertise-kafka-addr=internal://redpanda:9092,external://localhost:19092
+    ports: ["19092:19092", "9644:9644"]
+    volumes: ["redpanda-data:/var/lib/redpanda/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "rpk cluster health --exit-when-healthy"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  debezium:
+    image: quay.io/debezium/connect:3.2.1.Final
+    environment:
+      BOOTSTRAP_SERVERS: redpanda:9092
+      GROUP_ID: agentic-context-connect
+      CONFIG_STORAGE_TOPIC: context.connect.configs
+      OFFSET_STORAGE_TOPIC: context.connect.offsets
+      STATUS_STORAGE_TOPIC: context.connect.status
+      CONFIG_STORAGE_REPLICATION_FACTOR: "1"
+      OFFSET_STORAGE_REPLICATION_FACTOR: "1"
+      STATUS_STORAGE_REPLICATION_FACTOR: "1"
+    ports: ["8083:8083"]
+    depends_on:
+      postgres: {condition: service_healthy}
+      redpanda: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD-SHELL", "curl --fail --silent http://localhost:8083/connectors >/dev/null"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    restart: unless-stopped
+
+  debezium-init:
+    image: curlimages/curl:8.16.0
+    depends_on:
+      debezium: {condition: service_healthy}
+    volumes:
+      - ../../connectors/postgres-debezium/connector.json:/connector.json:ro
+    command:
+      - /bin/sh
+      - -ec
+      - >-
+        code=$$(curl --silent --output /tmp/response --write-out '%{http_code}'
+        -X PUT -H 'Content-Type: application/json'
+        --data-binary @/connector.json
+        http://debezium:8083/connectors/agentic-context-retail/config);
+        test "$$code" = 200 || test "$$code" = 201 || { cat /tmp/response; exit 1; }
+    restart: "no"
+
+  opensearch:
+    image: opensearchproject/opensearch:3.8.0
+    environment:
+      discovery.type: single-node
+      bootstrap.memory_lock: "true"
+      DISABLE_SECURITY_PLUGIN: "true"
+      OPENSEARCH_JAVA_OPTS: -Xms512m -Xmx512m
+    ulimits:
+      memlock: {soft: -1, hard: -1}
+    ports: ["9200:9200", "9600:9600"]
+    volumes: ["opensearch-data:/usr/share/opensearch/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "curl --fail --silent http://localhost:9200/_cluster/health?wait_for_status=yellow >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+    restart: unless-stopped
+
+  opensearch-bootstrap:
+    image: curlimages/curl:8.16.0
+    depends_on:
+      opensearch: {condition: service_healthy}
+    environment:
+      ACS_OPENSEARCH_URL: http://opensearch:9200
+    volumes:
+      - ../../connectors/opensearch/bootstrap.sh:/bootstrap.sh:ro
+      - ../../connectors/opensearch/index-template.json:/contracts/index-template.json:ro
+      - ../../connectors/opensearch/memory-index-template.json:/contracts/memory-index-template.json:ro
+    entrypoint: ["/bin/sh", "/bootstrap.sh"]
+    restart: "no"
+
+  opa:
+    image: openpolicyagent/opa:1.8.0
+    platform: linux/amd64
+    command: ["run", "--server", "--addr=0.0.0.0:8181", "/policies"]
+    ports: ["8181:8181"]
+    volumes:
+      - ../../policies:/policies:ro
+    healthcheck:
+      test: ["CMD", "/opa", "eval", "--fail", "-d", "/policies", "data.agentic_context.authz.allow"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    read_only: true
+    restart: unless-stopped
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.136.0
+    command: ["--config=/etc/otelcol/config.yaml"]
+    ports: ["4317:4317", "4318:4318", "8889:8889"]
+    volumes:
+      - ./otel-collector.yaml:/etc/otelcol/config.yaml:ro
+    healthcheck:
+      test: ["CMD", "/otelcol-contrib", "validate", "--config=/etc/otelcol/config.yaml"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:v3.6.0
+    command: ["--config.file=/etc/prometheus/prometheus.yml", "--storage.tsdb.path=/prometheus"]
+    ports: ["9090:9090"]
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    depends_on:
+      otel-collector: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD", "/bin/promtool", "check", "config", "/etc/prometheus/prometheus.yml"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  api:
+    build:
+      context: ../..
+      dockerfile: deploy/containers/Dockerfile
+      target: api
+    environment:
+      ACS_ENVIRONMENT: development
+      ACS_OPENSEARCH_URL: http://opensearch:9200
+      ACS_OPA_URL: http://opa:8181
+      ACS_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      ACS_DEMO_TOKEN: demo-retail-token
+      ACS_SIGNING_SECRET: local-showcase-only-change-this-key
+      HOME: /tmp
+    ports: ["8080:8080"]
+    depends_on:
+      opensearch-bootstrap: {condition: service_completed_successfully}
+      opa: {condition: service_healthy}
+      otel-collector: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/health/live', timeout=2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    restart: unless-stopped
+
+  indexer:
+    build:
+      context: ../..
+      dockerfile: deploy/containers/Dockerfile
+      target: indexer
+    environment:
+      ACS_ENVIRONMENT: development
+      ACS_OPENSEARCH_URL: http://opensearch:9200
+      ACS_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      ACS_SIGNING_SECRET: local-showcase-only-change-this-key
+      HOME: /tmp
+    depends_on:
+      debezium-init: {condition: service_completed_successfully}
+      opensearch-bootstrap: {condition: service_completed_successfully}
+      otel-collector: {condition: service_healthy}
+    restart: unless-stopped
+
+volumes:
+  postgres-data:
+  redpanda-data:
+  opensearch-data:
+  prometheus-data:

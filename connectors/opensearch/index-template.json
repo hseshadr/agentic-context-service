@@ -1,0 +1,32 @@
+{
+  "index_patterns": ["context-institutional-v1-*"],
+  "priority": 100,
+  "template": {
+    "settings": {
+      "index.knn": true,
+      "number_of_shards": 1,
+      "number_of_replicas": 0
+    },
+    "mappings": {
+      "dynamic": "strict",
+      "properties": {
+        "document_id": {"type": "keyword"},
+        "chunk_id": {"type": "keyword"},
+        "tenant_id": {"type": "keyword"},
+        "domain": {"type": "keyword"},
+        "entity_type": {"type": "keyword"},
+        "title": {"type": "text", "fields": {"raw": {"type": "keyword"}}},
+        "content": {"type": "text"},
+        "content_vector": {"type": "knn_vector", "dimension": 384, "method": {"name": "hnsw", "space_type": "cosinesimil", "engine": "lucene"}},
+        "keywords": {"type": "keyword"},
+        "relationships": {"type": "nested", "properties": {"type": {"type": "keyword"}, "target_id": {"type": "keyword"}}},
+        "source": {"properties": {"system": {"type": "keyword"}, "resource": {"type": "keyword"}, "record_id": {"type": "keyword"}, "uri": {"type": "keyword", "index": false}, "version": {"type": "keyword"}}},
+        "validity": {"properties": {"source_updated_at": {"type": "date"}, "indexed_at": {"type": "date"}, "valid_from": {"type": "date"}, "valid_to": {"type": "date"}, "is_deleted": {"type": "boolean"}}},
+        "governance": {"properties": {"classification": {"type": "keyword"}, "policy_tags": {"type": "keyword"}, "allowed_purposes": {"type": "keyword"}, "region": {"type": "keyword"}, "retention_class": {"type": "keyword"}}},
+        "lineage": {"properties": {"event_id": {"type": "keyword"}, "pipeline_version": {"type": "keyword"}, "embedding_model": {"type": "keyword"}, "content_hash": {"type": "keyword"}}},
+        "trust_class": {"type": "keyword"}
+      }
+    }
+  },
+  "_meta": {"schema_version": "canonical-document.v1", "embedding_dimensions": 384}
+}

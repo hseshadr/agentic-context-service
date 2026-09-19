@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentic-context-service.dev/schemas/canonical-document.schema.json",
+  "title": "Canonical context document",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "document_id", "chunk_id", "tenant_id", "domain", "entity_type", "title",
+    "content", "content_vector", "keywords", "relationships", "source", "validity",
+    "governance", "lineage", "trust_class"
+  ],
+  "properties": {
+    "document_id": {"type": "string", "minLength": 1},
+    "chunk_id": {"type": "string", "minLength": 1},
+    "tenant_id": {"type": "string", "minLength": 1},
+    "domain": {"type": "string", "minLength": 1},
+    "entity_type": {"type": "string", "minLength": 1},
+    "title": {"type": "string", "minLength": 1},
+    "content": {"type": "string", "minLength": 1},
+    "content_vector": {"type": "array", "items": {"type": "number"}},
+    "keywords": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+    "relationships": {
+      "type": "array",
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["type", "target_id"],
+        "properties": {"type": {"type": "string"}, "target_id": {"type": "string"}}
+      }
+    },
+    "source": {
+      "type": "object", "additionalProperties": false,
+      "required": ["system", "resource", "record_id", "uri", "version"],
+      "properties": {
+        "system": {"type": "string", "minLength": 1},
+        "resource": {"type": "string", "minLength": 1},
+        "record_id": {"type": "string", "minLength": 1},
+        "uri": {"type": "string", "minLength": 1},
+        "version": {"type": "string", "minLength": 1}
+      }
+    },
+    "validity": {
+      "type": "object", "additionalProperties": false,
+      "required": ["source_updated_at", "indexed_at", "valid_from", "valid_to", "is_deleted"],
+      "properties": {
+        "source_updated_at": {"type": "string", "format": "date-time"},
+        "indexed_at": {"type": "string", "format": "date-time"},
+        "valid_from": {"type": "string", "format": "date-time"},
+        "valid_to": {"type": ["string", "null"], "format": "date-time"},
+        "is_deleted": {"type": "boolean"}
+      }
+    },
+    "governance": {
+      "type": "object", "additionalProperties": false,
+      "required": ["classification", "policy_tags", "allowed_purposes", "region", "retention_class"],
+      "properties": {
+        "classification": {"enum": ["public", "internal", "confidential", "restricted"]},
+        "policy_tags": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+        "allowed_purposes": {"type": "array", "items": {"type": "string"}, "minItems": 1, "uniqueItems": true},
+        "region": {"type": "string", "minLength": 2},
+        "retention_class": {"type": "string", "pattern": "^R[0-9]+$"}
+      }
+    },
+    "lineage": {
+      "type": "object", "additionalProperties": false,
+      "required": ["event_id", "pipeline_version", "embedding_model", "content_hash"],
+      "properties": {
+        "event_id": {"type": "string", "minLength": 1},
+        "pipeline_version": {"type": "string", "minLength": 1},
+        "embedding_model": {"type": "string", "minLength": 1},
+        "content_hash": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"}
+      }
+    },
+    "trust_class": {"enum": ["authoritative", "source-derived", "evidentiary", "agent-derived", "proposed"]}
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "configuration": {
+    "demo_embedding_model": "all-MiniLM-L6-v2",
+    "embedding_model": "deterministic-fake-v1",
+    "k": 3,
+    "policy_version": "context-authz-v1",
+    "ranking_version": "rrf-k60-v1"
+  },
+  "failed_thresholds": [],
+  "generated_at": "2026-09-19T12:00:00+00:00",
+  "metrics": {
+    "citation_completeness": 1.0,
+    "estimated_model_cost_usd": 0.0,
+    "freshness_pass_rate": 1.0,
+    "lexical_contribution_count": 3,
+    "mrr": 1.0,
+    "ndcg_at_k": 1.0,
+    "p50_latency_ms": 46.0,
+    "p95_latency_ms": 53.2,
+    "recall_at_k": 1.0,
+    "semantic_contribution_count": 4,
+    "unauthorized_result_count": 0
+  },
+  "mode": "offline-versioned-fixtures",
+  "schema_version": "evaluation-corpus.v1",
+  "status": "PASS",
+  "thresholds": {
+    "citation_completeness": 1.0,
+    "freshness_pass_rate": 1.0,
+    "mrr": 0.85,
+    "ndcg_at_k": 0.85,
+    "p95_latency_ms": 700.0,
+    "recall_at_k": 1.0,
+    "unauthorized_result_count": 0
+  }
+}

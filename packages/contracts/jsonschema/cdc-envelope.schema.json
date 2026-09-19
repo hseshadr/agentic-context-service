@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentic-context-service.dev/schemas/cdc-envelope.schema.json",
+  "title": "Context CDC envelope",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["event_id", "source", "partition_key", "operation", "source_version", "occurred_at", "schema_version", "trace_id"],
+  "properties": {
+    "event_id": {"type": "string", "minLength": 10},
+    "source": {"type": "string", "minLength": 1},
+    "partition_key": {"type": "string", "minLength": 1},
+    "operation": {"enum": ["UPSERT", "DELETE"]},
+    "source_version": {"type": "integer", "minimum": 0},
+    "occurred_at": {"type": "string", "format": "date-time"},
+    "schema_version": {"type": "string", "pattern": "^[a-z][a-z0-9-]*\\.v[1-9][0-9]*$"},
+    "payload": {"type": ["object", "null"]},
+    "payload_ref": {"type": ["string", "null"]},
+    "trace_id": {"type": "string", "minLength": 16}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"operation": {"const": "UPSERT"}}},
+      "then": {"anyOf": [{"required": ["payload"]}, {"required": ["payload_ref"]}]}
+    }
+  ]
+}

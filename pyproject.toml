@@ -1,0 +1,136 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "agentic-context-service"
+version = "0.1.0"
+description = "A governed context and memory hub for agentic workflows."
+readme = "README.md"
+requires-python = ">=3.13,<3.14"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+authors = [{ name = "Harish Seshadri" }]
+keywords = ["agents", "context-engineering", "opensearch", "rag", "cdc"]
+classifiers = [
+  "Development Status :: 2 - Pre-Alpha",
+  "License :: OSI Approved :: Apache Software License",
+  "Programming Language :: Python :: 3.13",
+  "Typing :: Typed",
+]
+dependencies = [
+  "fastapi>=0.116,<1",
+  "httpx>=0.28,<1",
+  "opensearch-py[async]>=3.0,<4",
+  "opentelemetry-api>=1.37,<2",
+  "opentelemetry-exporter-otlp-proto-grpc>=1.37,<2",
+  "opentelemetry-sdk>=1.37,<2",
+  "prometheus-client>=0.22,<1",
+  "pydantic>=2.11,<3",
+  "pydantic-settings>=2.10,<3",
+  "uvicorn>=0.35,<1",
+]
+
+[project.optional-dependencies]
+cdc = ["aiokafka>=0.12,<1"]
+demo = ["sentence-transformers>=5,<6", "torch>=2.9,<3"]
+
+[tool.uv.sources]
+torch = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[project.urls]
+Homepage = "https://github.com/hseshadr/agentic-context-service"
+Repository = "https://github.com/hseshadr/agentic-context-service"
+Issues = "https://github.com/hseshadr/agentic-context-service/issues"
+
+[project.scripts]
+agentic-context = "agentic_context_service.cli:entrypoint"
+
+[dependency-groups]
+dev = [
+  "bandit>=1.8,<2",
+  "hatchling>=1.27,<2",
+  "hypothesis>=6.138,<7",
+  "mypy>=1.17,<2",
+  "openapi-spec-validator>=0.7,<1",
+  "pip-audit>=2.9,<3",
+  "poethepoet>=0.37,<1",
+  "pytest>=9.0.3,<10",
+  "pytest-asyncio>=1.2,<2",
+  "pytest-bdd>=8.1,<9",
+  "pytest-cov>=6,<8",
+  "pytest-socket>=0.8,<1",
+  "pyyaml>=6,<7",
+  "ruff>=0.12,<1",
+  "types-pyyaml>=6,<7",
+  "xenon>=0.9.3,<1",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/agentic_context_service"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W", "C901", "B", "UP", "SIM", "N", "RUF", "ASYNC", "S", "PL"]
+ignore = ["N818", "RUF036"]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 5
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["PLR2004", "S101", "S603", "S607"]
+"scripts/**/*.py" = ["S603", "S607"]
+
+[tool.mypy]
+python_version = "3.13"
+strict = true
+
+[tool.pytest.ini_options]
+addopts = "--strict-config --strict-markers --disable-socket --allow-unix-socket"
+asyncio_mode = "strict"
+filterwarnings = [
+  "error",
+]
+markers = [
+  "bdd: executable product behavior",
+  "integration: requires local containers",
+  "performance: bounded local performance proof",
+  "security: adversarial security behavior",
+]
+testpaths = ["tests"]
+
+[tool.coverage.run]
+branch = true
+source = ["agentic_context_service"]
+
+[tool.poe.tasks]
+bootstrap = "uv sync --all-extras --all-groups"
+lint-fix = "ruff check --fix ."
+format-write = "ruff format ."
+format = ["lint-fix", "format-write"]
+format-check = "ruff format --check ."
+lint-check = "ruff check ."
+typecheck = "mypy --strict src tests scripts"
+complexity = "xenon --max-absolute A --max-modules A --max-average A src scripts"
+unit = "pytest tests -m 'not integration and not bdd' --cov=src/agentic_context_service --cov-branch --cov-report=term-missing --cov-fail-under=90"
+bdd = "pytest tests/bdd -m bdd --cov=src/agentic_context_service --cov-branch --cov-append"
+integration = "pytest tests/integration -m integration --force-enable-socket"
+bandit = "bandit -q -r src scripts"
+dependency-audit = "pip-audit --cache-dir .artifacts/pip-audit-cache"
+security = ["bandit", "dependency-audit"]
+eval = "python -m scripts.evaluate"
+lint = ["format-check", "lint-check", "typecheck", "complexity"]
+verify = ["lint", "unit", "integration", "bdd", "security", "eval"]
+up = "docker compose -f deploy/compose/docker-compose.yml up -d --wait"
+seed = "python -m scripts.seed_demo"
+demo = "python -m scripts.run_demo"
+down = "docker compose -f deploy/compose/docker-compose.yml down"
+clean = "python -m scripts.clean"

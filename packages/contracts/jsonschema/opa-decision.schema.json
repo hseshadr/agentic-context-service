@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentic-context-service.dev/schemas/opa-decision.schema.json",
+  "title": "OPA context authorization decision",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["allow", "decision_id", "reason", "constraints"],
+  "properties": {
+    "allow": {"type": "boolean"},
+    "decision_id": {"type": "string", "minLength": 1},
+    "reason": {"type": "string", "minLength": 1},
+    "constraints": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tenant_id", "corpora", "classifications", "fields", "namespaces", "result_limit", "allow_lexical_fallback"],
+      "properties": {
+        "tenant_id": {"type": "string", "minLength": 1},
+        "corpora": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+        "classifications": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+        "fields": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+        "namespaces": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+        "result_limit": {"type": "integer", "minimum": 0, "maximum": 100},
+        "allow_lexical_fallback": {"type": "boolean"}
+      }
+    }
+  }
+}

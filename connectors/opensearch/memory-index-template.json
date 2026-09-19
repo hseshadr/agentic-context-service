@@ -1,0 +1,23 @@
+{
+  "index_patterns": ["context-memory-v1-*"],
+  "priority": 100,
+  "template": {
+    "settings": {"number_of_shards": 1, "number_of_replicas": 0},
+    "mappings": {
+      "dynamic": "strict",
+      "properties": {
+        "tenant_id": {"type": "keyword"},
+        "document_id": {"type": "keyword"},
+        "source": {"type": "keyword"},
+        "namespace": {"type": "keyword"},
+        "classification": {"type": "keyword"},
+        "content": {"type": "object", "dynamic": true},
+        "trust_class": {"type": "keyword"},
+        "origin": {"type": "keyword"},
+        "deleted": {"type": "boolean"},
+        "source_version": {"type": "long"}
+      }
+    }
+  },
+  "_meta": {"schema_version": "memory-document.v1", "trust_domain": "non-authoritative"}
+}

@@ -1,0 +1,488 @@
+openapi: 3.1.0
+info:
+  title: Agentic Context Service API
+  version: 1.0.0
+  summary: Governed, cited, freshness-aware context for agentic workflows.
+  description: >-
+    A vendor-neutral workflow boundary. The API accepts intent and policy-narrowing filters;
+    it never accepts OpenSearch DSL. Authorization is evaluated before candidate retrieval.
+  license:
+    name: Apache-2.0
+    identifier: Apache-2.0
+servers:
+  - url: http://localhost:8080
+    description: Local showcase
+security:
+  - bearerAuth: []
+tags:
+  - name: context
+  - name: memory
+  - name: evidence
+  - name: operations
+paths:
+  /v1/context:retrieve:
+    post:
+      operationId: retrieveContext
+      tags: [context]
+      summary: Retrieve policy-filtered hybrid context.
+      parameters: &governedHeaders
+        - $ref: '#/components/parameters/TeamId'
+        - $ref: '#/components/parameters/AppId'
+        - $ref: '#/components/parameters/WorkflowId'
+        - $ref: '#/components/parameters/WorkflowRevision'
+        - $ref: '#/components/parameters/AgentId'
+        - $ref: '#/components/parameters/Environment'
+        - $ref: '#/components/parameters/CostCenter'
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/TraceId'
+        - $ref: '#/components/parameters/ContextTimestamp'
+        - $ref: '#/components/parameters/ContextSignature'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/RetrieveRequest'}
+            examples:
+              pricing:
+                value:
+                  query: Why did SKU NORTHSTAR-104 miss its pricing target?
+                  corpora: [pricing, product, approved-decisions]
+                  filters: {brand: [NORTHSTAR], market: [US]}
+                  retrieval: {mode: hybrid, candidate_limit: 100, result_limit: 12, rerank: false, max_context_tokens: 6000, max_age_seconds: 300}
+                  purpose: pricing-analysis
+                  session_id: sess_demo
+      responses:
+        '200': {$ref: '#/components/responses/RetrieveSuccess'}
+        '400': {$ref: '#/components/responses/InvalidRequest'}
+        '401': {$ref: '#/components/responses/Unauthenticated'}
+        '403': {$ref: '#/components/responses/Denied'}
+        '409': {$ref: '#/components/responses/ContextStale'}
+        '424': {$ref: '#/components/responses/AuthorizationDependency'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+  /v1/context:batchRetrieve:
+    post:
+      operationId: batchRetrieveContext
+      tags: [context]
+      summary: Retrieve context for independent subquestions.
+      parameters: *governedHeaders
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [requests]
+              properties:
+                requests:
+                  type: array
+                  minItems: 1
+                  maxItems: 20
+                  items: {$ref: '#/components/schemas/RetrieveRequest'}
+      responses:
+        '200':
+          description: Ordered result for each subquestion.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [responses]
+                properties:
+                  responses: {type: array, items: {$ref: '#/components/schemas/RetrieveResponse'}}
+        '400': {$ref: '#/components/responses/InvalidRequest'}
+        '403': {$ref: '#/components/responses/Denied'}
+        '424': {$ref: '#/components/responses/AuthorizationDependency'}
+  /v1/memories:
+    post:
+      operationId: createMemory
+      tags: [memory]
+      summary: Store a non-authoritative governed memory.
+      parameters: *governedHeaders
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/MemoryCreate'}
+            example:
+              namespace:
+                environment: development
+                workflow_id: pricing-analysis
+                workflow_revision: v1
+                user_id: analyst-42
+                session_id: sess_demo
+                agent_id: demo
+              memory_type: working
+              text: The analyst prefers margin deltas as percentages.
+              source_evidence: []
+              expires_at: '2026-09-20T00:00:00Z'
+      responses:
+        '201':
+          description: Memory stored.
+          content: {application/json: {schema: {$ref: '#/components/schemas/OperationReceipt'}}}
+        '400': {$ref: '#/components/responses/InvalidRequest'}
+        '403': {$ref: '#/components/responses/Denied'}
+        '424': {$ref: '#/components/responses/AuthorizationDependency'}
+  /v1/memories:search:
+    post:
+      operationId: searchMemories
+      tags: [memory]
+      summary: Search permitted memory namespaces.
+      parameters: *governedHeaders
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [query, memory_types, namespace, result_limit]
+              properties:
+                query: {type: string, minLength: 1, maxLength: 4000}
+                memory_types: {type: array, maxItems: 20, uniqueItems: true, items: {type: string}}
+                namespace: {$ref: '#/components/schemas/MemoryNamespace'}
+                result_limit: {type: integer, minimum: 1, maximum: 100, default: 10}
+      responses:
+        '200':
+          description: Policy-filtered memory results.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [items, request_id]
+                properties:
+                  items: {type: array, items: {type: object, additionalProperties: true}}
+                  request_id: {type: string}
+        '403': {$ref: '#/components/responses/Denied'}
+        '424': {$ref: '#/components/responses/AuthorizationDependency'}
+  /v1/memories/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: {type: string, minLength: 1}
+    patch:
+      operationId: updateMemory
+      tags: [memory]
+      summary: Correct, approve, supersede, or expire a memory.
+      parameters: *governedHeaders
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              minProperties: 1
+              properties:
+                status: {enum: [active, corrected, superseded, expired]}
+                correction: {type: string, minLength: 1, maxLength: 50000}
+                superseded_by: {type: [string, 'null']}
+                expires_at: {type: [string, 'null'], format: date-time}
+      responses:
+        '200':
+          description: Updated memory.
+          content: {application/json: {schema: {$ref: '#/components/schemas/OperationReceipt'}}}
+        '403': {$ref: '#/components/responses/Denied'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '424': {$ref: '#/components/responses/AuthorizationDependency'}
+    delete:
+      operationId: deleteMemory
+      tags: [memory]
+      summary: Delete a memory and its retrievable projections.
+      parameters: *governedHeaders
+      responses:
+        '204': {description: Deleted or already absent.}
+        '403': {$ref: '#/components/responses/Denied'}
+        '424': {$ref: '#/components/responses/AuthorizationDependency'}
+  /v1/feedback:
+    post:
+      operationId: submitFeedback
+      tags: [evidence]
+      summary: Record retrieval usefulness without changing source truth.
+      parameters: *governedHeaders
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [retrieval_id, relevant]
+              properties:
+                retrieval_id: {type: string, minLength: 1}
+                relevant: {type: boolean}
+                note: {type: [string, 'null'], maxLength: 2000}
+      responses:
+        '202': {description: Feedback accepted as evidence.}
+        '403': {$ref: '#/components/responses/Denied'}
+  /v1/sources/{source}/freshness:
+    get:
+      operationId: getSourceFreshness
+      tags: [operations]
+      summary: Read source ingestion freshness and checkpoint status.
+      parameters:
+        - name: source
+          in: path
+          required: true
+          schema: {type: string, minLength: 1}
+        - $ref: '#/components/parameters/TeamId'
+        - $ref: '#/components/parameters/AppId'
+        - $ref: '#/components/parameters/WorkflowId'
+        - $ref: '#/components/parameters/WorkflowRevision'
+        - $ref: '#/components/parameters/AgentId'
+        - $ref: '#/components/parameters/Environment'
+        - $ref: '#/components/parameters/CostCenter'
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/TraceId'
+        - $ref: '#/components/parameters/ContextTimestamp'
+        - $ref: '#/components/parameters/ContextSignature'
+      responses:
+        '200':
+          description: Current freshness status.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [source, checkpoint, last_source_update_at, last_indexed_at, lag_seconds, freshness_class, within_slo]
+                properties:
+                  source: {type: string}
+                  checkpoint: {type: string}
+                  last_source_update_at: {type: string, format: date-time}
+                  last_indexed_at: {type: string, format: date-time}
+                  lag_seconds: {type: number, minimum: 0}
+                  freshness_class: {enum: [F1, F2, F3, F4]}
+                  within_slo: {type: boolean}
+        '403': {$ref: '#/components/responses/Denied'}
+        '424': {$ref: '#/components/responses/AuthorizationDependency'}
+  /health/live:
+    get:
+      operationId: liveness
+      tags: [operations]
+      security: []
+      summary: Process liveness only.
+      responses:
+        '200': {$ref: '#/components/responses/Health'}
+  /health/ready:
+    get:
+      operationId: readiness
+      tags: [operations]
+      security: []
+      summary: Dependency and policy readiness.
+      responses:
+        '200': {$ref: '#/components/responses/Health'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    TeamId: {name: X-Team-ID, in: header, required: true, schema: {type: string, minLength: 1}}
+    AppId: {name: X-App-ID, in: header, required: true, schema: {type: string, minLength: 1}}
+    WorkflowId: {name: X-Workflow-ID, in: header, required: true, schema: {type: string, minLength: 1}}
+    WorkflowRevision: {name: X-Workflow-Revision, in: header, required: true, schema: {type: string, minLength: 1}}
+    AgentId: {name: X-Agent-ID, in: header, required: true, schema: {type: string, minLength: 1}}
+    Environment: {name: X-Environment, in: header, required: true, schema: {enum: [development, test, staging, production]}}
+    CostCenter: {name: X-Cost-Center, in: header, required: true, schema: {type: string, minLength: 1}}
+    RequestId: {name: X-Request-ID, in: header, required: true, schema: {type: string, minLength: 1}}
+    TraceId: {name: X-Trace-ID, in: header, required: true, schema: {type: string, minLength: 16}}
+    ContextTimestamp: {name: X-ACS-Timestamp, in: header, required: true, description: Unix timestamp covered by the canonical HMAC signature., schema: {type: string, pattern: '^[0-9]{10}$'}}
+    ContextSignature: {name: X-ACS-Signature, in: header, required: true, description: Lowercase SHA-256 HMAC of the canonical request-context header bundle., schema: {type: string, pattern: '^[a-f0-9]{64}$'}}
+  schemas:
+    RetrieveRequest:
+      type: object
+      additionalProperties: false
+      required: [query, corpora, filters, retrieval, purpose]
+      properties:
+        query: {type: string, minLength: 1, maxLength: 4000}
+        corpora: {type: array, minItems: 1, maxItems: 20, uniqueItems: true, items: {type: string}}
+        filters:
+          type: object
+          description: Policy-narrowing metadata filters only; never OpenSearch DSL.
+          propertyNames:
+            enum: [brand, classification, entity_type, market, namespace, record_id, source]
+          additionalProperties:
+            type: array
+            maxItems: 100
+            uniqueItems: true
+            items: {type: string}
+        retrieval: {$ref: '#/components/schemas/RetrievalOptions'}
+        purpose: {type: string, minLength: 1, maxLength: 100}
+        session_id: {type: string, minLength: 1, maxLength: 256}
+    RetrievalOptions:
+      type: object
+      additionalProperties: false
+      required: [mode, candidate_limit, result_limit, rerank, max_context_tokens]
+      properties:
+        mode: {enum: [hybrid, lexical, semantic]}
+        candidate_limit: {type: integer, minimum: 1, maximum: 500}
+        result_limit: {type: integer, minimum: 1, maximum: 50}
+        rerank: {type: boolean, default: false}
+        max_context_tokens: {type: integer, minimum: 1, maximum: 32000}
+        max_age_seconds: {type: [integer, 'null'], minimum: 0, maximum: 31536000}
+        stale_behavior: {enum: [omit, fail], default: omit}
+    RetrieveResponse:
+      type: object
+      additionalProperties: false
+      required: [request_id, retrieval_id, results, retrieval]
+      properties:
+        request_id: {type: string}
+        retrieval_id: {type: string}
+        results: {type: array, items: {$ref: '#/components/schemas/ContextResult'}}
+        retrieval: {$ref: '#/components/schemas/RetrievalMetadata'}
+    ContextResult:
+      type: object
+      additionalProperties: false
+      required: [context_id, text, score, trust_class, citation, freshness, strategy, component_ranks]
+      properties:
+        context_id: {type: string}
+        text: {type: string}
+        score: {type: number}
+        trust_class: {enum: [authoritative, source-derived, evidentiary, agent-derived, proposed]}
+        citation: {$ref: '#/components/schemas/Citation'}
+        freshness: {$ref: '#/components/schemas/Freshness'}
+        strategy: {enum: [hybrid, lexical, semantic, memory]}
+        component_ranks:
+          type: object
+          additionalProperties: false
+          required: [lexical, semantic]
+          properties:
+            lexical: {type: [integer, 'null'], minimum: 1}
+            semantic: {type: [integer, 'null'], minimum: 1}
+    Citation:
+      type: object
+      additionalProperties: false
+      required: [title, source_uri, record_id, source_version]
+      properties:
+        title: {type: string, minLength: 1}
+        source_uri: {type: string, minLength: 1}
+        record_id: {type: string, minLength: 1}
+        source_version: {type: string, minLength: 1}
+    Freshness:
+      type: object
+      additionalProperties: false
+      required: [source_updated_at, indexed_at, age_seconds]
+      properties:
+        source_updated_at: {type: string, format: date-time}
+        indexed_at: {type: string, format: date-time}
+        age_seconds: {type: number, minimum: 0}
+    RetrievalMetadata:
+      type: object
+      additionalProperties: false
+      required: [strategy, embedding_model, policy_decision_id, partial, took_ms, candidate_count, result_count, ranking_version]
+      properties:
+        strategy: {type: string}
+        embedding_model: {type: string}
+        policy_decision_id: {type: string}
+        partial: {type: boolean}
+        took_ms: {type: number, minimum: 0}
+        candidate_count: {type: integer, minimum: 0}
+        result_count: {type: integer, minimum: 0}
+        ranking_version: {type: string}
+    MemoryCreate:
+      type: object
+      additionalProperties: false
+      required: [namespace, memory_type, text]
+      properties:
+        namespace: {$ref: '#/components/schemas/MemoryNamespace'}
+        memory_type: {type: string, minLength: 1, maxLength: 128}
+        text: {type: string, minLength: 1, maxLength: 50000}
+        source_evidence: {type: array, maxItems: 100, items: {$ref: '#/components/schemas/SourceEvidence'}}
+        expires_at: {type: [string, 'null'], format: date-time}
+    MemoryNamespace:
+      type: object
+      additionalProperties: false
+      required: [environment, workflow_id, workflow_revision, session_id]
+      properties:
+        environment: {type: string, minLength: 1, maxLength: 64}
+        workflow_id: {type: string, minLength: 1, maxLength: 256}
+        workflow_revision: {type: string, minLength: 1, maxLength: 128}
+        user_id: {type: [string, 'null'], minLength: 1, maxLength: 256}
+        session_id: {type: string, minLength: 1, maxLength: 256}
+        agent_id: {type: [string, 'null'], minLength: 1, maxLength: 256}
+    SourceEvidence:
+      type: object
+      additionalProperties: false
+      required: [source, document_id]
+      properties:
+        source: {type: string, minLength: 1, maxLength: 256}
+        document_id: {type: string, minLength: 1, maxLength: 512}
+        version: {type: [string, 'null'], maxLength: 128}
+        uri: {type: [string, 'null'], maxLength: 2048}
+    OperationReceipt:
+      type: object
+      additionalProperties: false
+      required: [id, status, request_id]
+      properties:
+        id: {type: string}
+        status: {type: string}
+        request_id: {type: string}
+        origin: {type: string}
+        trust_class: {type: string}
+        proposed: {type: boolean}
+    Error:
+      type: object
+      additionalProperties: false
+      required: [code, message, request_id, retryable]
+      properties:
+        code:
+          enum: [INVALID_REQUEST, UNAUTHENTICATED, POLICY_DENIED, AUTHORIZATION_DEPENDENCY_UNAVAILABLE, CONTEXT_STALE, NOT_FOUND, DEPENDENCY_UNAVAILABLE, INTERNAL_ERROR]
+        message: {type: string}
+        request_id: {type: string}
+        retryable: {type: boolean}
+        details: {type: object, additionalProperties: true}
+    Health:
+      type: object
+      additionalProperties: false
+      required: [status]
+      properties:
+        status: {enum: [ok, not_ready]}
+        dependencies: {type: object, additionalProperties: {enum: [ok, unavailable, degraded]}}
+  responses:
+    RetrieveSuccess:
+      description: Compact, cited context.
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/RetrieveResponse'}
+          example:
+            request_id: req_demo
+            retrieval_id: ret_demo
+            results:
+              - context_id: ctx_demo
+                text: NORTHSTAR-104 has a 20% promotional floor.
+                score: 0.91
+                trust_class: authoritative
+                citation: {title: Pricing rule NORTHSTAR-104, source_uri: 'postgres://retail/pricing_rules/NORTHSTAR-104', record_id: NORTHSTAR-104, source_version: '2'}
+                freshness: {source_updated_at: '2026-09-19T12:00:00Z', indexed_at: '2026-09-19T12:00:02Z', age_seconds: 2}
+                strategy: hybrid
+                component_ranks: {lexical: 1, semantic: 3}
+            retrieval: {strategy: hybrid-rrf-v1, embedding_model: all-MiniLM-L6-v2, policy_decision_id: opa_demo, partial: false, took_ms: 74, candidate_count: 20, result_count: 1, ranking_version: rrf-k60-v1}
+    InvalidRequest: {$ref: '#/components/responses/Error400'}
+    Error400:
+      description: Invalid public request.
+      content: {application/json: {schema: {$ref: '#/components/schemas/Error'}}}
+    Unauthenticated:
+      description: Missing or invalid delegated identity.
+      content: {application/json: {schema: {$ref: '#/components/schemas/Error'}}}
+    Denied:
+      description: Policy denied without disclosing protected candidates.
+      content: {application/json: {schema: {$ref: '#/components/schemas/Error'}}}
+    AuthorizationDependency:
+      description: Authorization could not be safely evaluated; request failed closed.
+      content: {application/json: {schema: {$ref: '#/components/schemas/Error'}}}
+    ContextStale:
+      description: Eligible context exceeded the caller's freshness limit.
+      content: {application/json: {schema: {$ref: '#/components/schemas/Error'}}}
+    NotFound:
+      description: Resource absent or intentionally concealed by policy.
+      content: {application/json: {schema: {$ref: '#/components/schemas/Error'}}}
+    Unavailable:
+      description: Required dependency unavailable.
+      content: {application/json: {schema: {$ref: '#/components/schemas/Error'}}}
+    Health:
+      description: Health state.
+      content: {application/json: {schema: {$ref: '#/components/schemas/Health'}}}

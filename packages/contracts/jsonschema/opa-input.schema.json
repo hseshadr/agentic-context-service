@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentic-context-service.dev/schemas/opa-input.schema.json",
+  "title": "OPA context authorization input",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["identity", "workload", "request"],
+  "properties": {
+    "identity": {
+      "type": "object", "additionalProperties": false,
+      "required": ["subject", "tenant_id", "teams", "entitlements"],
+      "properties": {
+        "subject": {"type": "string", "minLength": 1}, "tenant_id": {"type": "string", "minLength": 1},
+        "teams": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+        "entitlements": {"type": "array", "items": {"type": "string"}, "uniqueItems": true}
+      }
+    },
+    "workload": {
+      "type": "object", "additionalProperties": false,
+      "required": ["team_id", "app_id", "workflow_id", "workflow_revision", "agent_id", "environment", "cost_center", "headers_verified"],
+      "properties": {
+        "team_id": {"type": "string"}, "app_id": {"type": "string"}, "workflow_id": {"type": "string"},
+        "workflow_revision": {"type": "string"}, "agent_id": {"type": "string"},
+        "environment": {"enum": ["development", "test", "staging", "production"]},
+        "cost_center": {"type": "string"}, "headers_verified": {"type": "boolean"}
+      }
+    },
+    "request": {
+      "type": "object", "additionalProperties": false,
+      "required": ["operation", "purpose", "corpora", "classifications", "namespace", "source"],
+      "properties": {
+        "operation": {"enum": ["retrieve", "memory.write", "memory.search", "memory.update", "memory.delete", "feedback.write", "freshness.read"]},
+        "purpose": {"type": "string", "minLength": 1},
+        "corpora": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+        "classifications": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+        "namespace": {"type": ["string", "null"]},
+        "source": {"type": ["string", "null"]}
+      }
+    }
+  }
+}

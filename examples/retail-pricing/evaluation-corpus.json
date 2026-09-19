@@ -1,0 +1,49 @@
+{
+  "schema_version": "evaluation-corpus.v1",
+  "configuration": {
+    "embedding_model": "deterministic-fake-v1",
+    "demo_embedding_model": "all-MiniLM-L6-v2",
+    "ranking_version": "rrf-k60-v1",
+    "policy_version": "context-authz-v1",
+    "k": 3
+  },
+  "thresholds": {
+    "recall_at_k": 1.0,
+    "ndcg_at_k": 0.85,
+    "mrr": 0.85,
+    "citation_completeness": 1.0,
+    "unauthorized_result_count": 0,
+    "freshness_pass_rate": 1.0,
+    "p95_latency_ms": 700.0
+  },
+  "queries": [
+    {
+      "id": "exact-sku",
+      "query": "What is the floor for NORTHSTAR-104?",
+      "expected_ids": ["NORTHSTAR-104"],
+      "returned": [
+        {"id": "NORTHSTAR-104", "lexical_rank": 1, "semantic_rank": 3, "citation_complete": true, "authorized": true, "fresh": true}
+      ],
+      "latency_ms": 38.0
+    },
+    {
+      "id": "semantic-paraphrase",
+      "query": "Who needs to sign off on a steep sale?",
+      "expected_ids": ["policy:markdown:promo-approval"],
+      "returned": [
+        {"id": "policy:markdown:promo-approval", "lexical_rank": null, "semantic_rank": 1, "citation_complete": true, "authorized": true, "fresh": true}
+      ],
+      "latency_ms": 54.0
+    },
+    {
+      "id": "restricted-exclusion",
+      "query": "Show every NORTHSTAR plan",
+      "expected_ids": ["NORTHSTAR-104", "NORTHSTAR-205"],
+      "returned": [
+        {"id": "NORTHSTAR-104", "lexical_rank": 1, "semantic_rank": 2, "citation_complete": true, "authorized": true, "fresh": true},
+        {"id": "NORTHSTAR-205", "lexical_rank": 2, "semantic_rank": 1, "citation_complete": true, "authorized": true, "fresh": true}
+      ],
+      "latency_ms": 46.0
+    }
+  ]
+}

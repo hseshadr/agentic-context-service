@@ -1,0 +1,11 @@
+title = "Agentic Context Service secret-scan exceptions"
+
+[allowlist]
+description = "Documented local-only placeholder; it is not a credential."
+regexTarget = "line"
+regexes = [
+  '''ACS_SIGNING_SECRET=replace-with-at-least-32-characters''',
+]
+paths = [
+  '''^\.env\.example$''',
+]

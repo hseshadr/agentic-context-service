@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Five-minute architecture tour of Agentic Context Service.">
+  <title>Agentic Context Service — Architecture</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #07111f;
+      --panel: #0d1b2d;
+      --panel-2: #12253b;
+      --text: #edf7ff;
+      --muted: #9eb3c9;
+      --line: #29435f;
+      --cyan: #51d6ff;
+      --green: #6de5a6;
+      --amber: #ffcf6a;
+      --violet: #b9a0ff;
+      --shadow: 0 22px 70px rgb(0 0 0 / 30%);
+    }
+    [data-theme="light"] {
+      color-scheme: light;
+      --bg: #f4f8fc;
+      --panel: #ffffff;
+      --panel-2: #edf4fa;
+      --text: #102235;
+      --muted: #52687e;
+      --line: #c9d8e6;
+      --shadow: 0 22px 70px rgb(36 62 88 / 13%);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background:
+        radial-gradient(circle at 15% -10%, rgb(81 214 255 / 14%), transparent 34rem),
+        radial-gradient(circle at 95% 8%, rgb(185 160 255 / 12%), transparent 30rem),
+        var(--bg);
+      color: var(--text);
+      font: 15px/1.55 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    main { width: min(1180px, calc(100% - 32px)); margin: 0 auto; padding: 32px 0 72px; }
+    header { display: flex; gap: 24px; align-items: flex-start; justify-content: space-between; margin-bottom: 28px; }
+    .eyebrow { color: var(--cyan); font: 700 12px/1.2 ui-monospace, monospace; letter-spacing: .16em; text-transform: uppercase; }
+    h1 { margin: 8px 0 8px; font-size: clamp(30px, 5vw, 56px); line-height: 1.02; letter-spacing: -.04em; }
+    .lead { max-width: 780px; margin: 0; color: var(--muted); font-size: 18px; }
+    button {
+      border: 1px solid var(--line); border-radius: 999px; padding: 9px 13px; background: var(--panel);
+      color: var(--text); cursor: pointer; white-space: nowrap;
+    }
+    .hero, .card { border: 1px solid var(--line); background: color-mix(in srgb, var(--panel) 94%, transparent); box-shadow: var(--shadow); }
+    .hero { border-radius: 24px; overflow: hidden; }
+    .hero-top { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid var(--line); }
+    .legend { display: flex; flex-wrap: wrap; gap: 14px; color: var(--muted); font-size: 12px; }
+    .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+    .diagram { padding: 10px; overflow-x: auto; }
+    svg { display: block; width: 100%; min-width: 900px; height: auto; }
+    .zone { fill: var(--panel-2); stroke: var(--line); stroke-width: 1.5; }
+    .node { fill: var(--panel); stroke-width: 2; filter: drop-shadow(0 8px 12px rgb(0 0 0 / 12%)); }
+    .source { stroke: var(--amber); }
+    .ingest { stroke: var(--cyan); }
+    .govern { stroke: var(--green); }
+    .consumer { stroke: var(--violet); }
+    .node-title { fill: var(--text); font-size: 14px; font-weight: 750; text-anchor: middle; }
+    .node-sub { fill: var(--muted); font-size: 10px; text-anchor: middle; }
+    .zone-title { fill: var(--muted); font: 700 11px ui-monospace, monospace; letter-spacing: .11em; text-transform: uppercase; }
+    .flow { fill: none; stroke: var(--cyan); stroke-width: 2; marker-end: url(#arrow); }
+    .policy { stroke: var(--green); }
+    .response { stroke: var(--violet); }
+    .label { fill: var(--muted); font-size: 10px; text-anchor: middle; }
+    @media (prefers-reduced-motion: no-preference) {
+      .flow { stroke-dasharray: 8 7; animation: drift 1.7s linear infinite; }
+      @keyframes drift { to { stroke-dashoffset: -30; } }
+    }
+    .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 18px; }
+    .card { border-radius: 18px; padding: 20px; box-shadow: none; }
+    .card h2 { margin: 0 0 10px; font-size: 17px; }
+    .card p { color: var(--muted); margin: 0; }
+    .steps { counter-reset: step; display: grid; gap: 10px; margin-top: 18px; }
+    .step { display: grid; grid-template-columns: 34px 1fr; gap: 12px; align-items: start; padding: 12px 14px; border: 1px solid var(--line); border-radius: 14px; background: var(--panel); }
+    .step::before { counter-increment: step; content: counter(step); display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: rgb(81 214 255 / 15%); color: var(--cyan); font-weight: 800; }
+    .step strong { display: block; margin-bottom: 2px; }
+    .step span { color: var(--muted); }
+    .footer { margin-top: 22px; color: var(--muted); text-align: center; font-size: 12px; }
+    code { color: var(--cyan); }
+    @media (max-width: 820px) { .grid { grid-template-columns: 1fr; } header { flex-direction: column; } }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <div class="eyebrow">Five-minute system tour</div>
+        <h1>Context is a plane,<br>not prompt plumbing.</h1>
+        <p class="lead">Sources publish once. Agentic workflows retrieve one way—with authorization before ranking, stable citations, explicit freshness, and memory that cannot impersonate source truth.</p>
+      </div>
+      <button id="theme" type="button" aria-label="Toggle light and dark theme">Toggle theme</button>
+    </header>
+
+    <section class="hero" aria-labelledby="diagram-title">
+      <div class="hero-top">
+        <strong id="diagram-title">One governed path from change to context</strong>
+        <div class="legend" aria-label="Diagram legend">
+          <span><i class="dot" style="background:var(--amber)"></i>Source</span>
+          <span><i class="dot" style="background:var(--cyan)"></i>Ingestion</span>
+          <span><i class="dot" style="background:var(--green)"></i>Governance</span>
+          <span><i class="dot" style="background:var(--violet)"></i>Workflow</span>
+        </div>
+      </div>
+      <div class="diagram">
+        <svg viewBox="0 0 1120 590" role="img" aria-labelledby="svg-title svg-desc">
+          <title id="svg-title">Agentic Context Service logical architecture</title>
+          <desc id="svg-desc">PostgreSQL changes flow through Debezium, Redpanda, and the indexer into OpenSearch. A workflow calls Context Service, which authorizes through OPA before constrained hybrid retrieval.</desc>
+          <defs>
+            <marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="var(--cyan)"/></marker>
+          </defs>
+
+          <rect class="zone" x="24" y="50" width="210" height="470" rx="22"/>
+          <text class="zone-title" x="48" y="82">Authoritative sources</text>
+          <rect class="zone" x="260" y="50" width="330" height="470" rx="22"/>
+          <text class="zone-title" x="284" y="82">Asynchronous ingestion</text>
+          <rect class="zone" x="616" y="50" width="330" height="470" rx="22"/>
+          <text class="zone-title" x="640" y="82">Governed context plane</text>
+          <rect class="zone" x="972" y="50" width="124" height="470" rx="22"/>
+          <text class="zone-title" x="990" y="82">Consumer</text>
+
+          <g><rect class="node source" x="56" y="132" width="146" height="76" rx="14"/><text class="node-title" x="129" y="164">PostgreSQL 17</text><text class="node-sub" x="129" y="184">source of truth · WAL</text></g>
+          <g><rect class="node source" x="56" y="300" width="146" height="76" rx="14"/><text class="node-title" x="129" y="332">Documents</text><text class="node-sub" x="129" y="352">versioned fixture/source</text></g>
+          <g><rect class="node ingest" x="292" y="116" width="128" height="68" rx="14"/><text class="node-title" x="356" y="145">Debezium</text><text class="node-sub" x="356" y="164">CDC capture</text></g>
+          <g><rect class="node ingest" x="446" y="116" width="112" height="68" rx="14"/><text class="node-title" x="502" y="145">Redpanda</text><text class="node-sub" x="502" y="164">Kafka contract</text></g>
+          <g><rect class="node ingest" x="322" y="250" width="204" height="82" rx="14"/><text class="node-title" x="424" y="280">Context indexer</text><text class="node-sub" x="424" y="301">validate · normalize · chunk</text><text class="node-sub" x="424" y="316">embed · external version</text></g>
+          <g><rect class="node ingest" x="322" y="406" width="204" height="68" rx="14"/><text class="node-title" x="424" y="435">DLQ + replay</text><text class="node-sub" x="424" y="454">reason · trace · checkpoint</text></g>
+          <g><rect class="node govern" x="650" y="116" width="260" height="82" rx="14"/><text class="node-title" x="780" y="146">Context Service</text><text class="node-sub" x="780" y="167">intent · budget · cite · audit</text></g>
+          <g><rect class="node govern" x="650" y="258" width="114" height="68" rx="14"/><text class="node-title" x="707" y="286">OPA</text><text class="node-sub" x="707" y="305">fail closed</text></g>
+          <g><rect class="node govern" x="790" y="258" width="120" height="68" rx="14"/><text class="node-title" x="850" y="286">OpenSearch</text><text class="node-sub" x="850" y="305">hybrid hub</text></g>
+          <g><rect class="node govern" x="650" y="406" width="260" height="68" rx="14"/><text class="node-title" x="780" y="435">OTEL · Prometheus · audit</text><text class="node-sub" x="780" y="454">privacy-safe evidence</text></g>
+          <g><rect class="node consumer" x="990" y="224" width="88" height="110" rx="16"/><text class="node-title" x="1034" y="266">Agentic</text><text class="node-title" x="1034" y="286">workflow</text><text class="node-sub" x="1034" y="310">one API</text></g>
+
+          <path class="flow" d="M202 150 H292"/><text class="label" x="247" y="137">logical WAL</text>
+          <path class="flow" d="M420 150 H446"/>
+          <path class="flow" d="M502 184 V224 Q502 250 478 250"/>
+          <path class="flow" d="M202 338 H285 Q322 338 322 310"/>
+          <path class="flow" d="M424 332 V380 Q424 406 424 406"/>
+          <path class="flow" d="M526 290 H790"/><text class="label" x="658" y="277">durable upsert</text>
+          <path class="flow response" d="M990 250 H910"/><text class="label" x="950" y="238">signed intent</text>
+          <path class="flow policy" d="M746 198 L716 258"/><text class="label" x="696" y="225">authorize</text>
+          <path class="flow policy" d="M824 198 L850 258"/><text class="label" x="866" y="225">constrain</text>
+          <path class="flow response" d="M910 310 H990"/><text class="label" x="950" y="330">cited context</text>
+          <path class="flow policy" d="M780 198 V406"/>
+        </svg>
+      </div>
+    </section>
+
+    <section class="grid" aria-label="Architecture invariants">
+      <article class="card"><h2>Authorize before relevance</h2><p>OPA returns immutable tenant, corpus, classification, field, namespace, and limit constraints. User filters may only narrow them.</p></article>
+      <article class="card"><h2>Derived, replayable state</h2><p>Stable IDs, monotonic source versions, content hashes, tombstones, and post-write checkpoints make at-least-once CDC safe.</p></article>
+      <article class="card"><h2>Trust stays visible</h2><p>Institutional content and agent memory live in separate index families. Proposed memory never silently becomes source truth.</p></article>
+    </section>
+
+    <section aria-labelledby="request-title">
+      <h2 id="request-title" style="margin:32px 0 12px">A request in six moves</h2>
+      <div class="steps">
+        <div class="step"><div><strong>Verify identity and workload</strong><span>Authenticate the bearer token; verify the timestamped HMAC over canonical workload headers.</span></div></div>
+        <div class="step"><div><strong>Ask policy, then freeze constraints</strong><span>Any OPA timeout, malformed answer, or uncertainty fails closed before search.</span></div></div>
+        <div class="step"><div><strong>Retrieve both ways</strong><span>BM25 protects exact SKUs and policy IDs; vectors add paraphrases and conceptual matches.</span></div></div>
+        <div class="step"><div><strong>Fuse deterministically</strong><span>Reciprocal-rank fusion <code>k=60</code> preserves component ranks; the v1 reranker is intentionally a no-op.</span></div></div>
+        <div class="step"><div><strong>Budget, validate, and cite</strong><span>Trust, freshness, token, candidate, and result limits produce compact context with stable source versions.</span></div></div>
+        <div class="step"><div><strong>Emit evidence</strong><span>Connected traces, Prometheus metrics, and privacy-safe audit records make relevance and security inspectable.</span></div></div>
+      </div>
+    </section>
+    <p class="footer">Executable contracts: <code>packages/contracts/</code> · Decisions: <code>docs/adr/</code> · Operations: <code>docs/operations.md</code></p>
+  </main>
+  <script>
+    const root = document.documentElement;
+    const button = document.getElementById('theme');
+    button.addEventListener('click', () => {
+      root.dataset.theme = root.dataset.theme === 'dark' ? 'light' : 'dark';
+    });
+  </script>
+</body>
+</html>
