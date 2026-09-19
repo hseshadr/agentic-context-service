@@ -106,9 +106,7 @@ class MemorySearchRequest(APIModel):
 
 
 class MemoryPatchRequest(APIModel):
-    status: Literal["active", "corrected", "superseded", "expired"] | None = None
     correction: str | None = Field(default=None, min_length=1, max_length=50_000)
-    superseded_by: str | None = Field(default=None, min_length=1, max_length=256)
     expires_at: datetime | None = None
 
     @model_validator(mode="after")

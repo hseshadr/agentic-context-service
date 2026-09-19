@@ -487,6 +487,11 @@ async def test_memory_search_patch_delete_feedback_and_freshness(
     assert feedback["status"] == "accepted"
     assert freshness["live_documents"] == 2
     store.tombstone.assert_awaited_once()
+    patched_content = store.upsert.await_args_list[0].args[0].content
+    assert patched_content["text"] == "new"
+    assert patched_content["origin"] == "agent_derived"
+    assert patched_content["trust_class"] == "untrusted"
+    assert patched_content["proposed"] is True
     requests = [call.args[0]["request"] for call in opa.authorize.await_args_list]
     memory_request = next(
         request for request in requests if request["operation"] == "memory.search"
@@ -498,6 +503,32 @@ async def test_memory_search_patch_delete_feedback_and_freshness(
     )
     assert freshness_request["source"] == "postgresql"
     assert freshness_request["corpora"] == []
+
+
+@pytest.mark.asyncio
+async def test_agent_memory_patch_cannot_promote_or_supersede_authority(
+    context: CanonicalRequestContext,
+) -> None:
+    namespace = "tenant-company:production:returns:4:analyst-42:session-1:agent-1"
+    opa = AsyncMock()
+    opa.authorize.return_value = _decision(allowed_namespaces=(namespace,))
+    store = AsyncMock()
+    store.get.return_value = {
+        "tenant_id": "tenant-company",
+        "document_id": "mem-1",
+        "namespace": namespace,
+        "content": {"text": "old", "proposed": True},
+        "deleted": False,
+    }
+
+    with pytest.raises(PermissionError, match="authority"):
+        await GovernedContextService(opa=opa, store=store).execute(
+            "memory.patch",
+            context,
+            {"id": "mem-1", "status": "active"},
+        )
+
+    store.upsert.assert_not_awaited()
 
 
 @pytest.mark.asyncio

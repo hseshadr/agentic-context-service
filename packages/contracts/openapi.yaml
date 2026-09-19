@@ -176,9 +176,7 @@ paths:
               additionalProperties: false
               minProperties: 1
               properties:
-                status: {enum: [active, corrected, superseded, expired]}
                 correction: {type: string, minLength: 1, maxLength: 50000}
-                superseded_by: {type: [string, 'null']}
                 expires_at: {type: [string, 'null'], format: date-time}
       responses:
         '200':

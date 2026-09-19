@@ -308,8 +308,22 @@ class GovernedContextService:
             raise KeyError(payload["id"])
         namespace = str(current["namespace"])
         _require_allowed(namespace, decision.allowed_namespaces, "memory namespace")
+        _reject_authority_mutation(payload)
         content = dict(current.get("content", {}))
-        content.update({key: value for key, value in payload.items() if key != "id"})
+        correction = payload.get("correction")
+        if correction is not None:
+            content["text"] = correction
+            content["correction"] = correction
+        if "expires_at" in payload:
+            content["expires_at"] = payload["expires_at"]
+        content.update(
+            {
+                "origin": "agent_derived",
+                "trust_class": "untrusted",
+                "proposed": True,
+                "status": "active",
+            }
+        )
         await self._store.upsert(
             UpsertRequest(
                 tenant_id=context.tenant_id,
@@ -547,6 +561,11 @@ def _metadata_filters(filters: dict[str, Any]) -> dict[str, tuple[str, ...]]:
     if unknown:
         raise ValueError(f"unsupported filters: {', '.join(sorted(unknown))}")
     return {key: tuple(filters[key]) for key in supported if filters.get(key)}
+
+
+def _reject_authority_mutation(payload: dict[str, Any]) -> None:
+    if "status" in payload or "superseded_by" in payload:
+        raise PolicyDeniedError("agent cannot change memory authority or lifecycle state")
 
 
 def _apply_freshness(hits: list[Any], retrieval: dict[str, Any]) -> list[Any]:
