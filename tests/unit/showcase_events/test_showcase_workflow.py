@@ -301,7 +301,8 @@ async def test_deep_provider_limits_the_agent_to_two_read_only_governed_tools() 
             self.output = {"action": "reserve", "reason_code": "verified_fulfillment_promise"}
 
     class _Agent:
-        async def run(self, task: str) -> _Result:
+        async def run(self, task: str, **kwargs: object) -> _Result:
+            del kwargs
             assert "NORTHSTAR-104" in task
             tools = cast(tuple[Any, ...], captured["tools"])
             for tool in tools:

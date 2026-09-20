@@ -77,7 +77,7 @@ class _DeepAgentResult(Protocol):
 
 
 class _DeepAgent(Protocol):
-    async def run(self, task: str) -> _DeepAgentResult: ...
+    async def run(self, task: str, **kwargs: object) -> _DeepAgentResult: ...
 
 
 class _DeepAgentFactory(Protocol):
@@ -147,9 +147,13 @@ class PydanticDeepProposalProvider:
             web_search=False,
             web_fetch=False,
             thinking=False,
-            cost_tracking=False,
+            # Deep Agent 0.3.x requires its internal usage tracker; it exposes no tool or side effect.
+            cost_tracking=True,
         )
-        result = await agent.run(f"Propose fulfillment for {bundle.source.record_id} x 1.")
+        result = await agent.run(
+            f"Propose fulfillment for {bundle.source.record_id} x 1.",
+            deps=import_module("pydantic_deep").DeepAgentDeps(),
+        )
         proposal = _proposal_from_output(result.output)
         if set(used) != {"get_governed_fulfillment_context", "verify_context_freshness"}:
             raise RuntimeError("deep agent did not use every required governed tool")

@@ -235,6 +235,7 @@ services:
       ACS_SIGNING_SECRET: local-showcase-only-change-this-key
       ACS_SHOWCASE_AGENT_MODE: ${ACS_SHOWCASE_AGENT_MODE:-deterministic}
       ACS_AGENT_MODEL: ${ACS_AGENT_MODEL:-}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
       HOME: /tmp
     ports: ["8080:8080"]
     depends_on:
