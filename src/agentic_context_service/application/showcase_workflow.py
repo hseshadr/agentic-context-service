@@ -125,10 +125,12 @@ class PydanticDeepProposalProvider:
         agent = factory(
             model=_openrouter_model(self._model, self._api_key),
             instructions=(
-                "Call both tools before proposing. Propose only reserve or decline from their "
-                "results. You have no execution authority and must return the typed output."
+                "First call get_governed_fulfillment_context, then call verify_context_freshness. "
+                "Do not answer before both calls succeed. Propose only reserve or decline. "
+                "Use their results only. You have no execution authority. "
+                "Return only JSON with action and reason_code."
             ),
-            output_type=_deep_output_type(),
+            output_type=str,
             tools=(get_governed_fulfillment_context, verify_context_freshness),
             capabilities=(),
             toolsets=(),
@@ -147,7 +149,7 @@ class PydanticDeepProposalProvider:
             web_search=False,
             web_fetch=False,
             thinking=False,
-            # Deep Agent 0.3.x requires its internal usage tracker; it exposes no tool or side effect.
+            # Deep Agent needs its internal usage tracker; it exposes no tool or side effect.
             cost_tracking=True,
         )
         result = await agent.run(
@@ -170,13 +172,6 @@ def _openrouter_model(model: str, api_key: Any) -> object:
     return module.OpenRouterModel(
         model_name=model.removeprefix("openrouter:"),
         provider=provider_module.OpenRouterProvider(api_key=api_key.get_secret_value()),
-    )
-
-
-def _deep_output_type() -> object:
-    pydantic = import_module("pydantic")
-    return pydantic.create_model(
-        "FulfillmentProposalOutput", action=(str, ...), reason_code=(str, ...)
     )
 
 
