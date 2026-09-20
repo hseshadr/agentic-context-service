@@ -28,34 +28,11 @@ This project centralizes the difficult parts:
 
 ## Architecture
 
-```mermaid
-flowchart LR
-  subgraph Sources[Authoritative sources]
-    PG[(PostgreSQL)]
-    Files[Versioned documents]
-  end
+[![Governed Context architecture: source changes flow through CDC into governed OpenSearch retrieval](docs/architecture/governed-context-flow.visual-check.2048x1320.dark.png)](docs/architecture/governed-context-flow.html)
 
-  subgraph Ingestion[Asynchronous ingestion]
-    DBZ[Debezium]
-    RP[Redpanda]
-    IDX[Context indexer]
-  end
-
-  subgraph Context[Governed context plane]
-    OPA[OPA]
-    API[Context Service]
-    OS[(OpenSearch)]
-  end
-
-  Agent[Agentic workflow]
-
-  PG --> DBZ --> RP --> IDX --> OS
-  Files --> IDX
-  Agent -->|intent + signed workload context| API
-  API -->|authorize first| OPA
-  API -->|tenant-scoped hybrid query| OS
-  API -->|cited context package| Agent
-```
+The image is a rendered preview. Open the [interactive Archify diagram](docs/architecture/governed-context-flow.html)
+for guided views, zoom, themes, and export; the [five-minute architecture guide](docs/architecture/README.md)
+explains the design in prose.
 
 The workflow has one retrieval dependency: the Context Service. OpenSearch remains a derived hub;
 source systems remain authoritative.
