@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "diagram_type": "dataflow",
+  "meta": {
+    "title": "Governed Context: From Source Change to Cited Retrieval",
+    "quality_profile": "showcase",
+    "viewBox": [1068, 820],
+    "views": [
+      {
+        "id": "cdc-projection",
+        "label": "CDC projection",
+        "focus": ["catalog", "fulfillment", "debezium", "redpanda", "indexer", "opensearch"],
+        "note": "Authoritative databases publish changes once; the indexer acknowledges OpenSearch before advancing its checkpoint."
+      },
+      {
+        "id": "governed-retrieval",
+        "label": "Governed retrieval",
+        "focus": ["workflow", "api", "opa", "opensearch"],
+        "note": "The workflow retrieves cited context through the bounded API; it never queries a source database or OpenSearch directly."
+      },
+      {
+        "id": "redacted-observation",
+        "label": "Redacted observation",
+        "focus": ["showcase", "api"],
+        "note": "The local showcase receives allowlisted run metadata only; it has no business authority."
+      }
+    ]
+  },
+  "stages": [
+    { "label": "Authoritative sources" },
+    { "label": "CDC transit" },
+    { "label": "Derived context" },
+    { "label": "Governed API" },
+    { "label": "Consumers" }
+  ],
+  "nodes": [
+    { "id": "catalog", "type": "database", "label": "Catalog PostgreSQL", "sublabel": "pricing rules", "tag": "authoritative", "stage": 0, "row": 0 },
+    { "id": "fulfillment", "type": "database", "label": "Fulfillment PG", "sublabel": "promise rules", "tag": "authoritative", "stage": 0, "row": 2 },
+    { "id": "debezium", "type": "backend", "label": "Debezium Connect", "sublabel": "WAL capture", "tag": "source identity retained", "stage": 1, "row": 1 },
+    { "id": "redpanda", "type": "messagebus", "label": "Redpanda", "sublabel": "CDC topics + DLQ", "tag": "at-least-once", "stage": 2, "row": 1 },
+    { "id": "indexer", "type": "backend", "label": "CDC Indexer", "sublabel": "normalize · embed · order", "tag": "ack before checkpoint", "stage": 3, "row": 0 },
+    { "id": "opensearch", "type": "database", "label": "OpenSearch", "sublabel": "derived context", "tag": "external versions", "stage": 3, "row": 2 },
+    { "id": "opa", "type": "security", "label": "OPA", "sublabel": "purpose + field policy", "tag": "fail closed", "stage": 3, "row": 4 },
+    { "id": "api", "type": "backend", "label": "Context Service API", "sublabel": "bounded API", "tag": "tenant scoped", "stage": 4, "row": 1 },
+    { "id": "workflow", "type": "frontend", "label": "Agentic workflow", "sublabel": "cited context consumer", "tag": "no direct data access", "stage": 4, "row": 0 },
+    { "id": "showcase", "type": "frontend", "label": "Local showcase UI", "sublabel": "redacted observation", "tag": "no authority", "stage": 4, "row": 3 }
+  ],
+  "flows": [
+    { "from": "catalog", "to": "debezium", "label": "catalog WAL", "classification": "row changes", "variant": "emphasis", "route": "vertical-channel" },
+    { "from": "fulfillment", "to": "debezium", "label": "fulfillment WAL", "classification": "row changes", "variant": "emphasis", "route": "vertical-channel", "labelAt": [260, 430] },
+    { "from": "debezium", "to": "redpanda", "label": "Debezium envelope", "classification": "source named", "variant": "emphasis", "route": "straight" },
+    { "from": "redpanda", "to": "indexer", "label": "CDC delivery", "classification": "manual checkpoint", "variant": "emphasis", "route": "vertical-channel", "labelDy": -34 },
+    { "from": "indexer", "to": "opensearch", "label": "canonical projection", "classification": "ordered write", "variant": "emphasis", "route": "vertical-channel", "labelDy": 36 },
+    { "from": "workflow", "to": "api", "label": "bounded retrieve", "classification": "workflow identity", "variant": "default", "route": "straight", "labelAt": [1040, 215] },
+    { "from": "api", "to": "opa", "label": "authorize fields", "classification": "fail closed", "variant": "security", "route": "vertical-channel", "labelAt": [830, 660] },
+    { "from": "api", "to": "opensearch", "label": "tenant-scoped query", "classification": "derived only", "variant": "default", "route": "vertical-channel", "labelAt": [590, 460] },
+    { "from": "api", "to": "workflow", "label": "cited context", "classification": "untrusted data", "variant": "emphasis", "route": "bottom-channel", "labelAt": [1040, 315] },
+    { "from": "api", "to": "showcase", "label": "snapshot + SSE", "classification": "allowlisted metadata", "variant": "dashed", "route": "vertical-channel", "labelAt": [1060, 430] }
+  ],
+  "cards": [
+    { "dot": "emerald", "title": "Source of truth", "items": ["Catalog and fulfillment databases remain authoritative", "OpenSearch is a derived retrieval hub", "Provenance retains the independent Debezium source identity"] },
+    { "dot": "cyan", "title": "Delivery rule", "items": ["The indexer normalizes and embeds each CDC record", "OpenSearch acknowledges before the Kafka checkpoint advances", "Malformed records go through the bounded dead-letter path"] },
+    { "dot": "violet", "title": "Governed consumption", "items": ["Workflows call one typed retrieval API", "OPA constrains purpose and visible fields before ranking", "The UI displays redacted metadata and cannot execute business work"] }
+  ]
+}

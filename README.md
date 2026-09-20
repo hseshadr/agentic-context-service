@@ -93,6 +93,38 @@ volumes with:
 make down
 ```
 
+The architecture is documented as both a concise explorable [governed context flow](docs/architecture/governed-context-flow.html)
+and a [five-minute written map](docs/architecture/README.md).
+
+### Browser proof for the live showcase
+
+The UI is covered by a Chromium Playwright test that starts the actual FastAPI application and
+exercises the public showcase route. Install its isolated Node dependencies and browser once, then
+run the test:
+
+```bash
+make ui-install
+make ui
+```
+
+This browser gate is intentionally separate from the backend `make verify` command, so a normal
+library or CDC check does not download a browser. The repository CI runs it for every pull request
+and push to `main`.
+
+To exercise the same browser flow against the running Compose stack—including the fixed,
+idempotent fulfillment-promise mutation, its CDC projection, governed fulfillment retrieval, and
+the bounded decision/transaction trace—run:
+
+```bash
+PLAYWRIGHT_BASE_URL=http://127.0.0.1:8080 PLAYWRIGHT_LIVE_CDC=1 make ui
+```
+
+The local demo transaction adapter is intentionally a no-op; it never creates a real order. Its
+small fulfillment workflow documents the forward and compensating operations separately in
+[examples/fulfillment-agent](examples/fulfillment-agent/README.md). The optional Pydantic Deep
+provider proposes from two read-only governed tools, while deterministic checks and transaction
+adapters remain authoritative.
+
 ## API shape
 
 Workflows call a bounded contract; they cannot submit raw OpenSearch DSL or choose a tenant.
@@ -151,6 +183,7 @@ make integration
 make bdd
 make security
 make eval
+make ui
 make verify
 ```
 

@@ -1,11 +1,13 @@
 # PostgreSQL / Debezium connector
 
-The reference connector captures only `public.pricing_rules` from the synthetic PostgreSQL 17
-source. It uses `pgoutput`, an initial snapshot, one stable replication slot, JSON payloads without
-embedded schemas, heartbeat events, and the `context.dlq` topic for tolerated connector errors.
+The local showcase captures two independently owned synthetic PostgreSQL 17 sources: catalog
+`public.pricing_rules` and fulfillment `public.fulfillment_rules`. Each uses `pgoutput`, an initial
+snapshot, a separate stable replication slot, JSON payloads without embedded schemas, heartbeat
+events, and the shared `context.dlq` topic for tolerated connector errors.
 
 `scripts/seed_demo.py` uses Debezium's idempotent `PUT /connectors/{name}/config` endpoint. The
-indexer consumes `context.public.pricing_rules` with manual checkpoints. Connector acknowledgement
+indexer consumes `catalog.public.pricing_rules` and `fulfillment.public.fulfillment_rules` with
+manual checkpoints. Connector acknowledgement
 does not prove OpenSearch durability; the indexer's consumer offset advances only after an index or
 durable DLQ acknowledgement.
 

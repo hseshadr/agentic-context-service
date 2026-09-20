@@ -22,7 +22,10 @@ from agentic_context_service.adapters.embedding import (
 from agentic_context_service.adapters.opensearch import (
     CanonicalTombstone,
     OpenSearchContextStore,
+    Refresh,
 )
+from agentic_context_service.application.showcase_cdc import ShowcaseCdcBundle
+from agentic_context_service.application.showcase_events import ShowcaseSourceVersion
 from agentic_context_service.config import Settings
 from agentic_context_service.domain.ids import (
     deterministic_chunk_id,
@@ -30,10 +33,17 @@ from agentic_context_service.domain.ids import (
 )
 
 _MAX_DLQ_REASON = 2_000
+_MAX_DISCOUNT_PERCENT = 100
 
 
 class IndexerStore(Protocol):
-    async def index_canonical(self, document: dict[str, Any], source_version: int) -> None: ...
+    async def index_canonical(
+        self,
+        document: dict[str, Any],
+        source_version: int,
+        *,
+        refresh: Refresh = False,
+    ) -> None: ...
 
     async def tombstone_canonical(self, request: CanonicalTombstone) -> None: ...
 
@@ -46,6 +56,10 @@ class DlqPublisher(Protocol):
     async def publish(self, event: object, reason: str) -> None: ...
 
 
+class ShowcasePublisher(Protocol):
+    async def publish(self, bundle: ShowcaseCdcBundle) -> None: ...
+
+
 @dataclass(frozen=True, slots=True)
 class NormalizedSource:
     operation: str
@@ -56,6 +70,16 @@ class NormalizedSource:
     source_version: int
     ordering_version: int
     occurred_at: str
+
+
+@dataclass(frozen=True, slots=True)
+class IndexedProjection:
+    """The narrow proof that a display-safe source change is searchable in OpenSearch."""
+
+    source: NormalizedSource
+    document_id: str
+    run_id: str
+    correlation_id: str
 
 
 class CdcNormalizer:
@@ -74,7 +98,7 @@ class CdcNormalizer:
         return NormalizedSource(
             operation="DELETE" if operation == "d" else "UPSERT",
             record=dict(row),
-            source=str(source["connector"]),
+            source=self._source_name(source),
             resource=str(source["table"]),
             record_id=str(row["sku"]),
             source_version=int(row["source_version"]),
@@ -103,6 +127,14 @@ class CdcNormalizer:
         if not isinstance(source, dict):
             raise ValueError("Debezium source metadata is required")
         return source
+
+    @staticmethod
+    def _source_name(source: Mapping[str, Any]) -> str:
+        """Keep independently owned Debezium sources distinct in context provenance."""
+        name = source.get("name")
+        if isinstance(name, str) and name:
+            return name
+        return str(source["connector"])
 
     @staticmethod
     def _validate_row(row: Mapping[str, Any]) -> None:
@@ -152,40 +184,73 @@ class IndexerProcessor:
         self._embedder = embedder or DeterministicEmbedder()
         self._vectors: dict[tuple[str, str], tuple[float, ...]] = {}
 
-    async def process(self, event: Mapping[str, Any]) -> None:
+    async def process(self, event: Mapping[str, Any]) -> IndexedProjection | None:
         source = self._normalizer.parse(event)
         document_id = deterministic_document_id(source.source, source.resource, source.record_id)
         content_hash = sha256(str(source.record["content"]).encode()).hexdigest()
         chunk_id = deterministic_chunk_id(document_id, 0, "stable-ordinal-v1")
         if source.operation == "DELETE":
-            document = self._document(
-                source,
-                document_id,
-                chunk_id,
-                content_hash,
-                tuple(0.0 for _ in range(VECTOR_DIMENSIONS)),
+            await self._process_delete(source, document_id, chunk_id, content_hash)
+            return None
+        return await self._process_upsert(source, document_id, chunk_id, content_hash)
+
+    async def _process_delete(
+        self,
+        source: NormalizedSource,
+        document_id: str,
+        chunk_id: str,
+        content_hash: str,
+    ) -> None:
+        document = self._document(
+            source,
+            document_id,
+            chunk_id,
+            content_hash,
+            tuple(0.0 for _ in range(VECTOR_DIMENSIONS)),
+        )
+        document["title"] = "Deleted context"
+        document["content"] = "Deleted"
+        document["keywords"] = []
+        validity = document["validity"]
+        if not isinstance(validity, dict):
+            raise TypeError("canonical validity must be an object")
+        validity["is_deleted"] = True
+        validity["valid_to"] = source.occurred_at
+        await self._store.tombstone_canonical(
+            CanonicalTombstone(
+                tenant_id=self._normalizer.tenant_id,
+                document_id=document_id,
+                chunk_id=chunk_id,
+                source=source.source,
+                source_version=source.ordering_version,
+                document=document,
             )
-            document["title"] = "Deleted context"
-            document["content"] = "Deleted"
-            document["keywords"] = []
-            validity = document["validity"]
-            if isinstance(validity, dict):
-                validity["is_deleted"] = True
-                validity["valid_to"] = source.occurred_at
-            await self._store.tombstone_canonical(
-                CanonicalTombstone(
-                    tenant_id=self._normalizer.tenant_id,
-                    document_id=document_id,
-                    chunk_id=chunk_id,
-                    source=source.source,
-                    source_version=source.ordering_version,
-                    document=document,
-                )
-            )
-            return
+        )
+
+    async def _process_upsert(
+        self,
+        source: NormalizedSource,
+        document_id: str,
+        chunk_id: str,
+        content_hash: str,
+    ) -> IndexedProjection | None:
         vector = await self._vector(document_id, content_hash, str(source.record["content"]))
         document = self._document(source, document_id, chunk_id, content_hash, vector)
-        await self._store.index_canonical(document, source.ordering_version)
+        showcase = _showcase_metadata(source.record)
+        await self._store.index_canonical(
+            document,
+            source.ordering_version,
+            refresh="wait_for" if showcase is not None else False,
+        )
+        if showcase is None:
+            return None
+        run_id, correlation_id = showcase
+        return IndexedProjection(
+            source=source,
+            document_id=document_id,
+            run_id=run_id,
+            correlation_id=correlation_id,
+        )
 
     async def _vector(self, document_id: str, content_hash: str, content: str) -> tuple[float, ...]:
         key = (document_id, content_hash)
@@ -205,12 +270,12 @@ class IndexerProcessor:
         vector: tuple[float, ...],
     ) -> dict[str, Any]:
         row = source.record
-        return {
+        document = {
             "document_id": document_id,
             "chunk_id": chunk_id,
             "tenant_id": self._normalizer.tenant_id,
-            "domain": "pricing",
-            "entity_type": "pricing_rule",
+            "domain": _domain_for(source.resource),
+            "entity_type": _entity_type_for(source.resource),
             "title": str(row["title"]),
             "content": str(row["content"]),
             "content_vector": list(vector),
@@ -220,7 +285,7 @@ class IndexerProcessor:
                 "system": source.source,
                 "resource": source.resource,
                 "record_id": source.record_id,
-                "uri": f"postgres://retail/{source.resource}/{source.record_id}",
+                "uri": f"postgres://{source.source}/{source.resource}/{source.record_id}",
                 "version": str(source.source_version),
             },
             "validity": {
@@ -245,6 +310,11 @@ class IndexerProcessor:
             },
             "trust_class": "source-derived",
         }
+        if source.resource == "pricing_rules":
+            document["source_facts"] = _pricing_facts(row, source.source_version)
+        if source.resource == "fulfillment_rules":
+            document["source_facts"] = _fulfillment_facts(row, source.source_version)
+        return document
 
 
 async def process_record(
@@ -253,12 +323,17 @@ async def process_record(
     processor: IndexerProcessor,
     consumer: ConsumerCheckpoint,
     dlq: DlqPublisher,
+    showcase_publisher: ShowcasePublisher | None = None,
 ) -> None:
     """Checkpoint only after an index acknowledgement or durable DLQ acknowledgement."""
     try:
-        await processor.process(event)
+        projection = await processor.process(event)
     except (KeyError, TypeError, ValueError) as error:
         await dlq.publish(event, str(error)[:_MAX_DLQ_REASON])
+        await consumer.commit()
+        return
+    if projection is not None and showcase_publisher is not None:
+        await showcase_publisher.publish(_showcase_bundle(projection))
     await consumer.commit()
 
 
@@ -278,6 +353,84 @@ def _embedding_model_name(embedder: AsyncEmbedder) -> str:
     return str(getattr(embedder, "model_id", "deterministic-hash-v1"))
 
 
+def _domain_for(resource: str) -> str:
+    return {"pricing_rules": "pricing", "fulfillment_rules": "fulfillment"}.get(resource, "source")
+
+
+def _entity_type_for(resource: str) -> str:
+    return {"pricing_rules": "pricing_rule", "fulfillment_rules": "fulfillment_rule"}.get(
+        resource, "source_record"
+    )
+
+
+def _pricing_facts(row: Mapping[str, Any], source_version: int) -> dict[str, str | int]:
+    value = row.get("max_discount_percent")
+    if not isinstance(value, int) or not 0 <= value <= _MAX_DISCOUNT_PERCENT:
+        raise ValueError("pricing_rules max_discount_percent must be an integer from 0 to 100")
+    return {
+        "kind": "retail_pricing_rule.v1",
+        "sku": str(row["sku"]),
+        "max_discount_percent": value,
+        "source_version": source_version,
+    }
+
+
+def _fulfillment_facts(row: Mapping[str, Any], source_version: int) -> dict[str, str | int | bool]:
+    available = row.get("available_to_promise")
+    if not isinstance(available, int) or isinstance(available, bool) or available < 0:
+        raise ValueError("fulfillment_rules available_to_promise must be a non-negative integer")
+    return {
+        "kind": "fulfillment_promise.v1",
+        "sku": str(row["sku"]),
+        "available_to_promise": available,
+        "carrier_cutoff_open": _fulfillment_flag(row, "carrier_cutoff_open"),
+        "address_hold": _fulfillment_flag(row, "address_hold"),
+        "risk_hold": _fulfillment_flag(row, "risk_hold"),
+        "source_version": source_version,
+    }
+
+
+def _fulfillment_flag(row: Mapping[str, Any], name: str) -> bool:
+    value = row.get(name)
+    if not isinstance(value, bool):
+        raise ValueError(f"fulfillment_rules {name} must be a boolean")
+    return value
+
+
+def _showcase_metadata(row: Mapping[str, Any]) -> tuple[str, str] | None:
+    run_id = row.get("showcase_run_id")
+    correlation_id = row.get("showcase_correlation_id")
+    if run_id is None and correlation_id is None:
+        return None
+    return (
+        _required_showcase_string(run_id, "showcase_run_id"),
+        _required_showcase_string(correlation_id, "showcase_correlation_id"),
+    )
+
+
+def _required_showcase_string(value: object, name: str) -> str:
+    if not isinstance(value, str) or not value:
+        raise ValueError(f"{name} must be a non-empty string")
+    return value
+
+
+def _showcase_bundle(projection: IndexedProjection) -> ShowcaseCdcBundle:
+    source = projection.source
+    return ShowcaseCdcBundle(
+        run_id=projection.run_id,
+        correlation_id=projection.correlation_id,
+        source=ShowcaseSourceVersion(
+            system=source.source,
+            record_id=source.record_id,
+            version=source.source_version,
+        ),
+        event_id=_event_id(source),
+        document_id=projection.document_id,
+        cdc_occurred_at=datetime.fromisoformat(source.occurred_at),
+        projection_applied_at=datetime.now(UTC),
+    )
+
+
 class KafkaDlqPublisher:
     def __init__(self, producer: Any, topic: str) -> None:
         self._producer = producer
@@ -288,6 +441,21 @@ class KafkaDlqPublisher:
         await self._producer.send_and_wait(self._topic, payload)
 
 
+class KafkaShowcasePublisher:
+    """Publish one redacted bundle after the correlated projection is searchable."""
+
+    def __init__(self, producer: Any, topic: str) -> None:
+        self._producer = producer
+        self._topic = topic
+
+    async def publish(self, bundle: ShowcaseCdcBundle) -> None:
+        await self._producer.send_and_wait(
+            self._topic,
+            json.dumps(bundle.payload(), separators=(",", ":")).encode(),
+            key=bundle.run_id.encode(),
+        )
+
+
 async def run() -> None:
     """Run the bounded, manual-checkpoint Kafka consumer."""
     settings = Settings()
@@ -295,7 +463,7 @@ async def run() -> None:
     client = AsyncOpenSearch(hosts=[settings.opensearch_url])
     store = OpenSearchContextStore(client, index_prefix=settings.opensearch_index_prefix)
     consumer = kafka.AIOKafkaConsumer(
-        settings.kafka_topic,
+        *settings.cdc_topics,
         bootstrap_servers=settings.kafka_bootstrap_servers,
         group_id=settings.kafka_group_id,
         enable_auto_commit=False,
@@ -313,8 +481,15 @@ async def run() -> None:
             embedder=SentenceTransformerEmbedder(settings.embedding_model),
         )
         dlq = KafkaDlqPublisher(producer, settings.kafka_dlq_topic)
+        showcase = KafkaShowcasePublisher(producer, settings.showcase_events_topic)
         async for message in consumer:
-            await process_record(message.value, processor=processor, consumer=consumer, dlq=dlq)
+            await process_record(
+                message.value,
+                processor=processor,
+                consumer=consumer,
+                dlq=dlq,
+                showcase_publisher=showcase,
+            )
     finally:
         await producer.stop()
         await consumer.stop()

@@ -5,21 +5,33 @@
   ],
   "corpora_by_purpose": {
     "pricing-analysis": ["pricing", "product", "approved-decisions"],
+    "fulfillment-analysis": ["fulfillment"],
     "customer-support": ["product", "support", "approved-decisions"],
     "memory-management": ["memory"]
   },
   "sources_by_purpose": {
     "pricing-analysis": ["postgresql", "documents"],
+    "fulfillment-analysis": ["postgresql"],
     "customer-support": ["postgresql", "documents"],
     "memory-management": []
   },
   "classifications_by_entitlement": {
     "pricing-analysis": ["public", "internal", "confidential"],
+    "fulfillment-analysis": ["public", "internal", "confidential"],
     "customer-support": ["public", "internal", "confidential"],
     "memory-management": ["memory"],
     "restricted-data": ["restricted"]
   },
-  "response_fields": [
-    "title", "content", "source", "validity", "trust_class", "lineage.content_hash"
-  ]
+  "response_fields_by_purpose": {
+    "pricing-analysis": [
+      "title", "content", "source", "validity", "trust_class", "lineage.content_hash", "source_facts"
+    ],
+    "fulfillment-analysis": [
+      "title", "content", "source", "validity", "trust_class", "lineage.content_hash", "source_facts"
+    ],
+    "customer-support": [
+      "title", "content", "source", "validity", "trust_class", "lineage.content_hash"
+    ],
+    "memory-management": []
+  }
 }

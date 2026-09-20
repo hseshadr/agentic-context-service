@@ -70,7 +70,13 @@ def _retrieval() -> dict[str, object]:
     return {
         "query": "What is the promotional floor for NORTHSTAR-104?",
         "corpora": ["pricing", "product", "approved-decisions"],
-        "filters": {"brand": ["NORTHSTAR"], "market": ["US"]},
+        "filters": {
+            "brand": ["NORTHSTAR"],
+            "market": ["US"],
+            "record_id": [TARGET_RECORD_ID],
+            "entity_type": ["pricing_rule"],
+            "source": ["catalog"],
+        },
         "retrieval": {
             "mode": "hybrid",
             "candidate_limit": 100,
@@ -166,6 +172,7 @@ def _valid_initial_result(result: object) -> bool:
     return all(
         (
             _target_citation(result.get("citation")),
+            _typed_pricing_fact(result),
             _freshness_present(result.get("freshness")),
             _rank_present(result.get("component_ranks")),
         )
@@ -179,6 +186,36 @@ def _target_citation(candidate: object) -> bool:
         and bool(candidate.get("source_uri"))
         and bool(candidate.get("source_version"))
     )
+
+
+def _typed_pricing_fact(candidate: object) -> bool:
+    if not isinstance(candidate, dict):
+        return False
+    citation = candidate.get("citation")
+    facts = candidate.get("source_facts")
+    return _catalog_citation(citation) and _valid_pricing_facts(facts, citation)
+
+
+def _catalog_citation(value: object) -> bool:
+    return isinstance(value, dict) and value.get("source_system") == "catalog"
+
+
+def _valid_pricing_facts(facts: object, citation: object) -> bool:
+    if not isinstance(facts, dict) or not isinstance(citation, dict):
+        return False
+    return _fact_identity_matches(facts) and _fact_version_matches(facts, citation)
+
+
+def _fact_identity_matches(facts: dict[object, object]) -> bool:
+    return (
+        facts.get("kind"),
+        facts.get("sku"),
+        isinstance(facts.get("max_discount_percent"), int),
+    ) == ("retail_pricing_rule.v1", TARGET_RECORD_ID, True)
+
+
+def _fact_version_matches(facts: dict[object, object], citation: dict[object, object]) -> bool:
+    return str(facts.get("source_version")) == str(citation.get("source_version"))
 
 
 def _freshness_present(candidate: object) -> bool:

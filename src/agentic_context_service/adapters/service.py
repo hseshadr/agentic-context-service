@@ -506,7 +506,10 @@ def _retrieve_response(
     retrieval_id = sha256(
         f"{context.tenant_id}:{context.request_id}:{payload['query']}".encode()
     ).hexdigest()[:24]
-    results = [_context_result(item, payload["retrieval"]["mode"]) for item in hits]
+    results = [
+        _context_result(item, payload["retrieval"]["mode"], decision.allowed_fields)
+        for item in hits
+    ]
     return {
         "request_id": context.request_id,
         "retrieval_id": f"ret_{retrieval_id}",
@@ -524,20 +527,21 @@ def _retrieve_response(
     }
 
 
-def _context_result(item: Any, strategy: str) -> dict[str, Any]:
+def _context_result(item: Any, strategy: str, allowed_fields: tuple[str, ...]) -> dict[str, Any]:
     serialized = _serialize(item)
     source = serialized["source"]
     evidence = source["source"]
     validity = source["validity"]
     updated_at = datetime.fromisoformat(str(validity["source_updated_at"]).replace("Z", "+00:00"))
     age_seconds = max(0, int((datetime.now(UTC) - updated_at).total_seconds()))
-    return {
+    result = {
         "context_id": source["chunk_id"],
         "text": source["content"],
         "score": serialized.get("score") or 0.0,
         "trust_class": source["trust_class"],
         "citation": {
             "title": source["title"],
+            "source_system": evidence["system"],
             "source_uri": evidence["uri"],
             "record_id": evidence["record_id"],
             "source_version": evidence["version"],
@@ -553,6 +557,10 @@ def _context_result(item: Any, strategy: str) -> dict[str, Any]:
             "semantic": serialized.get("semantic_rank"),
         },
     }
+    source_facts = source.get("source_facts")
+    if "source_facts" in allowed_fields and isinstance(source_facts, dict):
+        result["source_facts"] = source_facts
+    return result
 
 
 def _metadata_filters(filters: dict[str, Any]) -> dict[str, tuple[str, ...]]:

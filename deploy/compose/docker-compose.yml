@@ -21,6 +21,45 @@ services:
       retries: 20
     restart: unless-stopped
 
+  fulfillment-postgres:
+    image: postgres:17.6-alpine
+    environment:
+      POSTGRES_USER: context
+      POSTGRES_PASSWORD: context-local-only
+      POSTGRES_DB: fulfillment
+    command: ["postgres", "-c", "wal_level=logical", "-c", "max_replication_slots=4", "-c", "max_wal_senders=4"]
+    volumes:
+      - fulfillment-postgres-data:/var/lib/postgresql/data
+      - ../../examples/fulfillment/seed.sql:/docker-entrypoint-initdb.d/001-fulfillment.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U context -d fulfillment"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  fulfillment-schema-migrate:
+    image: postgres:17.6-alpine
+    environment:
+      PGPASSWORD: context-local-only
+    depends_on:
+      fulfillment-postgres: {condition: service_healthy}
+    volumes:
+      - ../../examples/fulfillment/migrate.sql:/migrate.sql:ro
+    command:
+      - psql
+      - -h
+      - fulfillment-postgres
+      - -U
+      - context
+      - -d
+      - fulfillment
+      - -v
+      - ON_ERROR_STOP=1
+      - -f
+      - /migrate.sql
+    restart: "no"
+
   redpanda:
     image: docker.redpanda.com/redpandadata/redpanda:v25.2.5
     command:
@@ -57,6 +96,7 @@ services:
     ports: ["8083:8083"]
     depends_on:
       postgres: {condition: service_healthy}
+      fulfillment-postgres: {condition: service_healthy}
       redpanda: {condition: service_healthy}
     healthcheck:
       test: ["CMD-SHELL", "curl --fail --silent http://localhost:8083/connectors >/dev/null"]
@@ -79,6 +119,23 @@ services:
         -X PUT -H 'Content-Type: application/json'
         --data-binary @/connector.json
         http://debezium:8083/connectors/agentic-context-retail/config);
+        test "$$code" = 200 || test "$$code" = 201 || { cat /tmp/response; exit 1; }
+    restart: "no"
+
+  fulfillment-debezium-init:
+    image: curlimages/curl:8.16.0
+    depends_on:
+      debezium: {condition: service_healthy}
+    volumes:
+      - ../../connectors/postgres-debezium/fulfillment-connector.json:/connector.json:ro
+    command:
+      - /bin/sh
+      - -ec
+      - >-
+        code=$$(curl --silent --output /tmp/response --write-out '%{http_code}'
+        -X PUT -H 'Content-Type: application/json'
+        --data-binary @/connector.json
+        http://debezium:8083/connectors/agentic-context-fulfillment/config);
         test "$$code" = 200 || test "$$code" = 201 || { cat /tmp/response; exit 1; }
     restart: "no"
 
@@ -167,8 +224,11 @@ services:
       ACS_OPENSEARCH_URL: http://opensearch:9200
       ACS_OPA_URL: http://opa:8181
       ACS_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
+      ACS_KAFKA_TOPICS: catalog.public.pricing_rules,fulfillment.public.fulfillment_rules
+      ACS_SHOWCASE_DATABASE_DSN: postgresql://context:context-local-only@fulfillment-postgres:5432/fulfillment
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
       ACS_DEMO_TOKEN: demo-retail-token
+      ACS_DEMO_ENTITLEMENTS: pricing-analysis,fulfillment-analysis,customer-support,memory-management
       ACS_SIGNING_SECRET: local-showcase-only-change-this-key
       HOME: /tmp
     ports: ["8080:8080"]
@@ -176,6 +236,8 @@ services:
       opensearch-bootstrap: {condition: service_completed_successfully}
       opa: {condition: service_healthy}
       otel-collector: {condition: service_healthy}
+      fulfillment-postgres: {condition: service_healthy}
+      fulfillment-schema-migrate: {condition: service_completed_successfully}
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/health/live', timeout=2)"]
       interval: 5s
@@ -192,17 +254,20 @@ services:
       ACS_ENVIRONMENT: development
       ACS_OPENSEARCH_URL: http://opensearch:9200
       ACS_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
+      ACS_KAFKA_TOPICS: catalog.public.pricing_rules,fulfillment.public.fulfillment_rules
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
       ACS_SIGNING_SECRET: local-showcase-only-change-this-key
       HOME: /tmp
     depends_on:
       debezium-init: {condition: service_completed_successfully}
+      fulfillment-debezium-init: {condition: service_completed_successfully}
       opensearch-bootstrap: {condition: service_completed_successfully}
       otel-collector: {condition: service_healthy}
     restart: unless-stopped
 
 volumes:
   postgres-data:
+  fulfillment-postgres-data:
   redpanda-data:
   opensearch-data:
   prometheus-data:

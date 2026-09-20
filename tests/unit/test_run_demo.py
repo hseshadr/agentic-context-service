@@ -30,8 +30,15 @@ def _result(record_id: str, source_version: str) -> dict[str, object]:
             {
                 "content": "unrelated",
                 "citation": {
+                    "source_system": "catalog",
                     "record_id": record_id,
                     "source_version": source_version,
+                },
+                "source_facts": {
+                    "kind": "retail_pricing_rule.v1",
+                    "sku": record_id,
+                    "max_discount_percent": 20,
+                    "source_version": int(source_version),
                 },
             }
         ]
@@ -174,6 +181,7 @@ def test_initial_context_requires_citation_freshness_and_component_ranks() -> No
     item = cast(dict[str, object], cast(list[object], valid["results"])[0])
     item["citation"] = {
         "record_id": "NORTHSTAR-104",
+        "source_system": "catalog",
         "source_version": "1",
         "source_uri": "postgres://retail/pricing_rules/NORTHSTAR-104",
     }
@@ -188,6 +196,7 @@ def test_await_initial_context_retries_until_valid(monkeypatch: pytest.MonkeyPat
     valid = _result("NORTHSTAR-104", "1")
     item = cast(dict[str, object], cast(list[object], valid["results"])[0])
     item["citation"] = {
+        "source_system": "catalog",
         "record_id": "NORTHSTAR-104",
         "source_version": "1",
         "source_uri": "postgres://retail/pricing_rules/NORTHSTAR-104",

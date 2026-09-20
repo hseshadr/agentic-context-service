@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
+from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 from hashlib import sha256
 from types import SimpleNamespace
@@ -19,6 +21,10 @@ from agentic_context_service.api.request_context import (
     RequestContextSigner,
     StaticTokenAuthenticator,
 )
+from agentic_context_service.api.showcase import KafkaShowcaseConsumer, ShowcaseRegistry
+from agentic_context_service.application.showcase_cdc import ShowcaseCdcBundle
+from agentic_context_service.application.showcase_events import ShowcaseSourceVersion
+from agentic_context_service.application.showcase_source import FulfillmentPromiseShowcaseWriter
 
 
 class RecordingService:
@@ -31,6 +37,53 @@ class RecordingService:
 
     async def ready(self) -> bool:
         return True
+
+
+class RecordingShowcaseStore:
+    async def start(self, run_id: str, correlation_id: str) -> int:
+        assert run_id == "demo-retail-001"
+        assert correlation_id == "showcase:demo-retail-001"
+        return 3
+
+
+class Message:
+    def __init__(self, value: object) -> None:
+        self.value = value
+
+
+class FakeKafkaConsumer:
+    def __init__(self, values: list[object]) -> None:
+        self._values = iter(values)
+        self.commits = 0
+        self.stopped = False
+
+    def __aiter__(self) -> AsyncIterator[Message]:
+        return self
+
+    async def __anext__(self) -> Message:
+        try:
+            return Message(next(self._values))
+        except StopIteration as error:
+            raise StopAsyncIteration from error
+
+    async def commit(self) -> None:
+        self.commits += 1
+
+    async def stop(self) -> None:
+        self.stopped = True
+
+
+def _showcase_bundle() -> ShowcaseCdcBundle:
+    occurred_at = datetime(2026, 9, 19, 12, tzinfo=UTC)
+    return ShowcaseCdcBundle(
+        run_id="demo-retail-001",
+        correlation_id="showcase:demo-retail-001",
+        source=ShowcaseSourceVersion(system="fulfillment", record_id="NORTHSTAR-104", version=2),
+        event_id="evt_showcase_1",
+        document_id="doc_showcase_1",
+        cdc_occurred_at=occurred_at,
+        projection_applied_at=occurred_at,
+    )
 
 
 def _authenticator() -> StaticTokenAuthenticator:
@@ -89,6 +142,74 @@ async def test_openapi_exposes_complete_typed_v1_surface() -> None:
     retrieve_schema = app.openapi()["components"]["schemas"]["RetrieveRequest"]
     assert "query" in retrieve_schema["properties"]
     assert "dsl" not in retrieve_schema["properties"]
+
+
+@pytest.mark.asyncio
+async def test_showcase_exposes_only_redacted_observation_and_local_controls() -> None:
+    registry = ShowcaseRegistry()
+    await registry.apply_cdc_bundle(_showcase_bundle())
+    app = create_app(
+        service=RecordingService(),
+        signing_secret=b"a sufficiently long test signing secret",
+        authenticator=_authenticator(),
+        showcase_registry=registry,
+        showcase_writer=FulfillmentPromiseShowcaseWriter(RecordingShowcaseStore()),
+    )
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        page = await client.get("/showcase/")
+        initial = await client.get("/v1/showcase/runs/demo-retail-001")
+        command = await client.post(
+            "/v1/showcase/runs/demo-retail-001/commands", json={"action": "start"}
+        )
+        snapshot = await client.get("/v1/showcase/runs/demo-retail-001")
+
+    assert page.status_code == 200
+    assert "Watch a decision earn its evidence." in page.text
+    assert [event["lane"] for event in initial.json()["events"]] == ["source", "cdc", "cdc"]
+    assert command.json()["accepted"] == "start"
+    assert command.json()["source"] == {
+        "system": "fulfillment",
+        "record_id": "NORTHSTAR-104",
+        "source_version": 3,
+    }
+    assert "prompt" not in str(snapshot.json()).lower()
+
+
+@pytest.mark.asyncio
+async def test_showcase_consumer_projects_safe_bundles_and_skips_invalid_payloads() -> None:
+    registry = ShowcaseRegistry()
+    fake = FakeKafkaConsumer([_showcase_bundle().payload(), {"unexpected": "payload"}])
+    consumer = KafkaShowcaseConsumer(
+        bootstrap_servers="kafka:9092",
+        topic="context.showcase.events",
+        group_id="showcase-test",
+        registry=registry,
+    )
+    consumer._consumer = fake
+
+    await consumer._consume()
+
+    assert fake.commits == 2
+    assert registry.get_or_create("demo-retail-001").snapshot().sequence == 3
+
+
+@pytest.mark.asyncio
+async def test_showcase_consumer_stop_cancels_its_task_and_closes_kafka() -> None:
+    registry = ShowcaseRegistry()
+    fake = FakeKafkaConsumer([])
+    consumer = KafkaShowcaseConsumer(
+        bootstrap_servers="kafka:9092",
+        topic="context.showcase.events",
+        group_id="showcase-test",
+        registry=registry,
+    )
+    consumer._consumer = fake
+    consumer._task = asyncio.create_task(asyncio.sleep(60))
+
+    await consumer.stop()
+
+    assert fake.stopped is True
 
 
 @pytest.mark.asyncio

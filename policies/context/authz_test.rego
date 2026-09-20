@@ -35,6 +35,22 @@ test_allows_verified_entitled_request if {
     decision.constraints.classifications == ["internal"]
 }
 
+test_pricing_facts_are_only_returned_to_pricing_analysis if {
+    pricing := data.agentic_context.authz.decision with input as base_input
+    "source_facts" in pricing.constraints.fields
+
+    support_identity := object.union(base_input.identity, {
+        "entitlements": ["customer-support"],
+    })
+    support_request := object.union(base_input.request, {"purpose": "customer-support"})
+    support_input := object.union(base_input, {
+        "identity": support_identity,
+        "request": support_request,
+    })
+    support := data.agentic_context.authz.decision with input as support_input
+    not "source_facts" in support.constraints.fields
+}
+
 test_fails_closed_for_unverified_headers if {
     workload := object.union(base_input.workload, {"headers_verified": false})
     request := object.union(base_input, {"workload": workload})

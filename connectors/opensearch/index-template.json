@@ -20,6 +20,7 @@
         "content_vector": {"type": "knn_vector", "dimension": 384, "method": {"name": "hnsw", "space_type": "cosinesimil", "engine": "lucene"}},
         "keywords": {"type": "keyword"},
         "relationships": {"type": "nested", "properties": {"type": {"type": "keyword"}, "target_id": {"type": "keyword"}}},
+        "source_facts": {"type": "object", "dynamic": "strict", "properties": {"kind": {"type": "keyword"}, "sku": {"type": "keyword"}, "max_discount_percent": {"type": "integer"}, "available_to_promise": {"type": "integer"}, "carrier_cutoff_open": {"type": "boolean"}, "address_hold": {"type": "boolean"}, "risk_hold": {"type": "boolean"}, "source_version": {"type": "long"}}},
         "source": {"properties": {"system": {"type": "keyword"}, "resource": {"type": "keyword"}, "record_id": {"type": "keyword"}, "uri": {"type": "keyword", "index": false}, "version": {"type": "keyword"}}},
         "validity": {"properties": {"source_updated_at": {"type": "date"}, "indexed_at": {"type": "date"}, "valid_from": {"type": "date"}, "valid_to": {"type": "date"}, "is_deleted": {"type": "boolean"}}},
         "governance": {"properties": {"classification": {"type": "keyword"}, "policy_tags": {"type": "keyword"}, "allowed_purposes": {"type": "keyword"}, "region": {"type": "keyword"}, "retention_class": {"type": "keyword"}}},

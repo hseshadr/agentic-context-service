@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="dark light">
+    <meta name="description" content="A redacted, live trace of governed context flowing through deterministic compensation.">
+    <title>Context flow · Agentic Context Service</title>
+    <link rel="stylesheet" href="./styles.css">
+  </head>
+  <body>
+    <a class="skip-link" href="#flow">Skip to live flow</a>
+    <header class="masthead">
+      <div>
+        <p class="eyebrow">Agentic Context Service · observable showcase</p>
+        <h1>Watch a decision earn its evidence.</h1>
+        <p class="lede">A redacted, real-time view of source changes, governed context, agent proposals, and deterministic execution.</p>
+      </div>
+      <div class="connection" aria-live="polite">
+        <span class="status-dot" data-status-dot></span>
+        <span data-connection-label>Not connected</span>
+      </div>
+    </header>
+
+    <main>
+      <section class="control-panel" aria-labelledby="run-controls-title">
+        <div>
+          <p class="eyebrow">Live run</p>
+          <h2 id="run-controls-title">Connect to a workflow trace</h2>
+        </div>
+        <form id="run-form" class="run-form">
+          <label for="run-id">Run ID</label>
+          <input id="run-id" name="run-id" autocomplete="off" inputmode="text" value="demo-retail-001" required maxlength="120" pattern="[A-Za-z0-9._-]+">
+          <button type="submit">Connect</button>
+        </form>
+        <div class="run-actions" aria-label="Workflow controls">
+          <button type="button" class="secondary" data-command="start">Start run</button>
+        </div>
+        <p class="control-note" id="control-note">Connect to a run to enable the fixed fulfillment-promise demonstration. This screen never accepts arbitrary business input.</p>
+      </section>
+
+      <section class="signal" aria-labelledby="signal-title" data-message="empty">
+        <div class="signal-mark" aria-hidden="true">↗</div>
+        <div>
+          <h2 id="signal-title" data-message-title>Waiting for a workflow run</h2>
+          <p data-message-body>Enter a run ID and connect. This dashboard never renders raw source rows, prompts, credentials, or unfiltered agent output.</p>
+        </div>
+      </section>
+
+      <section id="flow" class="flow" aria-labelledby="flow-title">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">The evidence path</p>
+            <h2 id="flow-title">Four lanes, one accountable outcome</h2>
+          </div>
+          <p class="run-state" data-run-state>—</p>
+        </div>
+
+        <div class="lanes" aria-live="polite" aria-relevant="additions text">
+          <section class="lane source-lane" data-lane="source" aria-labelledby="source-title">
+            <div class="lane-header">
+              <span class="lane-number">01</span>
+              <div><p class="eyebrow">Source systems</p><h3 id="source-title">A fact changes</h3></div>
+            </div>
+            <ol class="event-list" data-events="source">
+              <li class="empty-event">Waiting for a redacted source event.</li>
+            </ol>
+          </section>
+
+          <section class="lane cdc-lane" data-lane="cdc" aria-labelledby="cdc-title">
+            <div class="lane-header">
+              <span class="lane-number">02</span>
+              <div><p class="eyebrow">CDC projection</p><h3 id="cdc-title">Context catches up</h3></div>
+            </div>
+            <ol class="event-list" data-events="cdc">
+              <li class="empty-event">Waiting for the durable projection.</li>
+            </ol>
+          </section>
+
+          <section class="lane agent-lane" data-lane="agent" aria-labelledby="agent-title">
+            <div class="lane-header">
+              <span class="lane-number">03</span>
+              <div><p class="eyebrow">Agent + evidence</p><h3 id="agent-title">A proposal is bounded</h3></div>
+            </div>
+            <ol class="event-list" data-events="agent">
+              <li class="empty-event">Waiting for a cited tool decision.</li>
+            </ol>
+          </section>
+
+          <section class="lane transaction-lane" data-lane="transaction" aria-labelledby="transaction-title">
+            <div class="lane-header">
+              <span class="lane-number">04</span>
+              <div><p class="eyebrow">Transaction authority</p><h3 id="transaction-title">Work commits or compensates</h3></div>
+            </div>
+            <ol class="event-list" data-events="transaction">
+              <li class="empty-event">Waiting for deterministic execution.</li>
+            </ol>
+          </section>
+        </div>
+      </section>
+
+      <section class="evidence-panel" aria-labelledby="evidence-title">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Audit-friendly by design</p>
+            <h2 id="evidence-title">Evidence and safeguards</h2>
+          </div>
+          <p class="caption">Metadata is redacted at the source and allowlisted again in the browser.</p>
+        </div>
+        <dl class="facts" data-facts>
+          <div><dt>Tenant</dt><dd>—</dd></div>
+          <div><dt>Policy</dt><dd>—</dd></div>
+          <div><dt>Citation version</dt><dd>—</dd></div>
+          <div><dt>Trace</dt><dd>—</dd></div>
+        </dl>
+        <ol class="audit-log" data-audit-log>
+          <li class="empty-event">No redacted audit events yet.</li>
+        </ol>
+      </section>
+    </main>
+
+    <template id="event-template">
+      <li class="event-card" data-status="pending">
+        <div class="event-topline"><span class="event-type"></span><time></time></div>
+        <p class="event-title"></p>
+        <dl class="event-meta"></dl>
+      </li>
+    </template>
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>

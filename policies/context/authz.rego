@@ -122,7 +122,7 @@ decision := {
         "tenant_id": input.identity.tenant_id,
         "corpora": allowed_corpora,
         "classifications": allowed_classifications,
-        "fields": data.context.response_fields,
+        "fields": object.get(data.context.response_fields_by_purpose, input.request.purpose, []),
         "namespaces": allowed_namespaces,
         "result_limit": result_limit,
         "allow_lexical_fallback": allow_lexical_fallback,

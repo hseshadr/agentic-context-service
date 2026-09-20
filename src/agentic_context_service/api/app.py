@@ -1,12 +1,14 @@
 """FastAPI transport kept deliberately thin around an application service."""
 
 from collections.abc import Awaitable, Callable
+from pathlib import Path
 from time import perf_counter
 from typing import Annotated, Any, Protocol
 
 from fastapi import Depends, FastAPI, HTTPException, Request, Response, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from agentic_context_service.adapters.observability import (
     emit_retrieval_audit,
@@ -31,6 +33,8 @@ from agentic_context_service.api.request_context import (
     RequestContextError,
     RequestContextVerifier,
 )
+from agentic_context_service.api.showcase import ShowcaseRegistry, register_showcase_routes
+from agentic_context_service.application.showcase_source import ShowcaseSourceWriter
 
 
 class ContextApplication(Protocol):
@@ -55,6 +59,8 @@ def create_app(
     service: ContextApplication,
     signing_secret: bytes,
     authenticator: BearerAuthenticator,
+    showcase_registry: ShowcaseRegistry | None = None,
+    showcase_writer: ShowcaseSourceWriter | None = None,
 ) -> FastAPI:
     """Build the transport with explicit dependencies for tests and production."""
     app = FastAPI(title="Agentic Context Service", version="0.1.0")
@@ -67,6 +73,7 @@ def create_app(
     _register_evidence_routes(app, dispatch, trusted_context)
     _register_health_routes(app, service)
     _register_metrics_route(app)
+    _register_showcase(app, showcase_registry, showcase_writer)
     return app
 
 
@@ -193,6 +200,17 @@ def _register_metrics_route(app: FastAPI) -> None:
     async def metrics() -> Response:
         payload, content_type = metrics_payload()
         return Response(content=payload, media_type=content_type)
+
+
+def _register_showcase(
+    app: FastAPI,
+    registry: ShowcaseRegistry | None,
+    writer: ShowcaseSourceWriter | None,
+) -> None:
+    """Serve the local, redacted showcase separately from authenticated data APIs."""
+    register_showcase_routes(app, registry or ShowcaseRegistry(), writer)
+    directory = Path(__file__).with_name("static") / "showcase"
+    app.mount("/showcase", StaticFiles(directory=directory, html=True), name="showcase")
 
 
 def _register_health_routes(app: FastAPI, service: ContextApplication) -> None:

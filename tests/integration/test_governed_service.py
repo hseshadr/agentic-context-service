@@ -254,6 +254,7 @@ async def test_canonical_hit_returns_complete_public_evidence(
     opa.authorize.return_value = _decision(
         allowed_corpora=("pricing",),
         allowed_classifications=("internal",),
+        allowed_fields=("source_facts",),
         result_limit=1,
     )
     store = AsyncMock()
@@ -268,7 +269,14 @@ async def test_canonical_hit_returns_complete_public_evidence(
                 "title": "Pricing rule",
                 "content": "Floor is 20 percent.",
                 "trust_class": "source-derived",
+                "source_facts": {
+                    "kind": "retail_pricing_rule.v1",
+                    "sku": "NORTHSTAR-104",
+                    "max_discount_percent": 20,
+                    "source_version": 7,
+                },
                 "source": {
+                    "system": "catalog",
                     "uri": "postgres://pricing/1",
                     "record_id": "1",
                     "version": "7",
@@ -290,11 +298,12 @@ async def test_canonical_hit_returns_complete_public_evidence(
             "corpora": ("pricing",),
             "filters": {},
             "retrieval": {"mode": "hybrid", "result_limit": 1},
-            "purpose": "customer-support",
+            "purpose": "pricing-analysis",
         },
     )
 
     assert result["results"][0]["citation"]["source_version"] == "7"
+    assert result["results"][0]["source_facts"]["max_discount_percent"] == 20
     assert result["results"][0]["freshness"]["age_seconds"] >= 0
     assert result["retrieval"]["ranking_version"] == "rrf-k60-v1"
 
@@ -326,6 +335,7 @@ async def test_retrieval_enforces_freshness_token_and_candidate_budgets(
                 "content": text,
                 "trust_class": "source-derived",
                 "source": {
+                    "system": "catalog",
                     "uri": f"postgres://pricing/{document_id}",
                     "record_id": document_id,
                     "version": "1",
@@ -400,7 +410,12 @@ async def test_retrieval_can_fail_closed_on_stale_context(
                 "title": "Stale",
                 "content": "old",
                 "trust_class": "source-derived",
-                "source": {"uri": "x", "record_id": "stale", "version": "1"},
+                "source": {
+                    "system": "catalog",
+                    "uri": "x",
+                    "record_id": "stale",
+                    "version": "1",
+                },
                 "validity": {
                     "source_updated_at": old.isoformat(),
                     "indexed_at": old.isoformat(),

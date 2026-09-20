@@ -33,8 +33,9 @@ deterministic and never use sleeps except bounded eventual-consistency polling i
 tests. New non-generated Python maintains at least 90% line and branch coverage.
 
 Required commands are `make bootstrap`, `format`, `lint`, `unit`, `integration`, `bdd`,
-`security`, `eval`, `up`, `seed`, `demo`, `down`, `clean`, and `verify`. Poe owns their canonical
-definitions. Demo and test failures must produce a nonzero exit status.
+`security`, `eval`, `ui-install`, `ui`, `up`, `seed`, `demo`, `down`, `clean`, and `verify`.
+Poe owns their canonical definitions. `ui` is a real Chromium Playwright proof of the public
+showcase route. Demo and test failures must produce a nonzero exit status.
 
 ## 1. Executive decision
 

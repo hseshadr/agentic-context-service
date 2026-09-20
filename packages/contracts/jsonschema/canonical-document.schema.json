@@ -27,6 +27,35 @@
         "properties": {"type": {"type": "string"}, "target_id": {"type": "string"}}
       }
     },
+    "source_facts": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "sku", "max_discount_percent", "source_version"],
+          "properties": {
+            "kind": {"const": "retail_pricing_rule.v1"},
+            "sku": {"type": "string", "minLength": 1},
+            "max_discount_percent": {"type": "integer", "minimum": 0, "maximum": 100},
+            "source_version": {"type": "integer", "minimum": 1}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "sku", "available_to_promise", "carrier_cutoff_open", "address_hold", "risk_hold", "source_version"],
+          "properties": {
+            "kind": {"const": "fulfillment_promise.v1"},
+            "sku": {"type": "string", "minLength": 1},
+            "available_to_promise": {"type": "integer", "minimum": 0},
+            "carrier_cutoff_open": {"type": "boolean"},
+            "address_hold": {"type": "boolean"},
+            "risk_hold": {"type": "boolean"},
+            "source_version": {"type": "integer", "minimum": 1}
+          }
+        }
+      ]
+    },
     "source": {
       "type": "object", "additionalProperties": false,
       "required": ["system", "resource", "record_id", "uri", "version"],

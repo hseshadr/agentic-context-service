@@ -80,6 +80,15 @@ def test_openapi_has_every_required_endpoint_and_no_raw_dsl() -> None:
     assert "raw_dsl" not in serialized
 
 
+def test_local_indexer_consumes_every_declared_showcase_cdc_topic() -> None:
+    compose = yaml.safe_load((ROOT / "deploy/compose/docker-compose.yml").read_text())
+    indexer_environment = compose["services"]["indexer"]["environment"]
+
+    assert indexer_environment["ACS_KAFKA_TOPICS"] == (
+        "catalog.public.pricing_rules,fulfillment.public.fulfillment_rules"
+    )
+
+
 def test_inward_layers_import_no_vendor_frameworks() -> None:
     forbidden = {
         "fastapi",

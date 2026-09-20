@@ -20,8 +20,9 @@ RUN HF_HUB_OFFLINE=0 TRANSFORMERS_OFFLINE=0 python -c \
     && chmod -R a+rX /opt/huggingface
 
 FROM demo-runtime AS api
+RUN uv sync --frozen --no-dev --extra cdc --extra demo --extra showcase --no-install-project
 COPY src ./src
-RUN uv sync --frozen --no-dev --extra demo --no-editable
+RUN uv sync --frozen --no-dev --extra cdc --extra demo --extra showcase --no-editable
 USER 65532:65532
 EXPOSE 8080
 CMD ["uvicorn", "agentic_context_service.bootstrap:create_app", "--factory", "--host", "0.0.0.0", "--port", "8080"]

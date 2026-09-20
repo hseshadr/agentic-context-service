@@ -191,6 +191,57 @@ async def test_hybrid_search_records_component_ranks_and_fuses_with_rrf(client: 
 
 
 @pytest.mark.asyncio
+async def test_typed_source_facts_are_projected_only_when_policy_allows(client: Any) -> None:
+    source = {
+        "tenant_id": "tenant-a",
+        "document_id": "pricing-104",
+        "chunk_id": "pricing-104:0",
+        "domain": "pricing",
+        "governance": {"classification": "internal", "allowed_purposes": ["pricing-analysis"]},
+        "validity": {"is_deleted": False},
+        "source_facts": {
+            "kind": "retail_pricing_rule.v1",
+            "sku": "NORTHSTAR-104",
+            "max_discount_percent": 20,
+            "source_version": 7,
+        },
+    }
+    client.search.side_effect = [
+        {"hits": {"hits": [{"_score": 1.0, "_source": source}]}},
+        {"hits": {"hits": [{"_score": 1.0, "_source": source}]}},
+    ]
+    store = OpenSearchContextStore(client, index_prefix="acs-test")
+
+    denied = await store.search(
+        SearchRequest(
+            tenant_id="tenant-a",
+            text="NORTHSTAR-104",
+            corpora=("pricing",),
+            classifications=("internal",),
+            purpose="pricing-analysis",
+            allowed_fields=("source", "validity", "trust_class"),
+        )
+    )
+    assert "source_facts" not in denied[0].source
+
+    client.search.side_effect = [
+        {"hits": {"hits": [{"_score": 1.0, "_source": source}]}},
+        {"hits": {"hits": [{"_score": 1.0, "_source": source}]}},
+    ]
+    allowed = await store.search(
+        SearchRequest(
+            tenant_id="tenant-a",
+            text="NORTHSTAR-104",
+            corpora=("pricing",),
+            classifications=("internal",),
+            purpose="pricing-analysis",
+            allowed_fields=("source", "validity", "trust_class", "source_facts"),
+        )
+    )
+    assert allowed[0].source["source_facts"]["max_discount_percent"] == 20
+
+
+@pytest.mark.asyncio
 async def test_vector_failure_falls_back_only_when_policy_allows(client: Any) -> None:
     client.search.return_value = {
         "hits": {

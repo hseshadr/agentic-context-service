@@ -16,3 +16,7 @@ build/
 .artifacts/
 .dagger/.venv/
 .dagger/sdk/
+node_modules/
+test-results/
+playwright-report/
+docs/architecture/*.visual-check.*

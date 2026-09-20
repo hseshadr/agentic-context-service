@@ -17,6 +17,15 @@ from agentic_context_service.api.request_context import (
     AuthenticatedPrincipal,
     StaticTokenAuthenticator,
 )
+from agentic_context_service.api.showcase import KafkaShowcaseConsumer, ShowcaseRegistry
+from agentic_context_service.application.showcase_source import (
+    FulfillmentPromiseShowcaseWriter,
+    PostgresFulfillmentShowcaseStore,
+)
+from agentic_context_service.application.showcase_workflow import (
+    FulfillmentShowcaseProcessor,
+    ShowcaseWorkflowIdentity,
+)
 from agentic_context_service.config import Settings
 
 
@@ -47,12 +56,43 @@ def create_app() -> FastAPI:
         teams=(settings.demo_team_id,),
         entitlements=tuple(_csv(settings.demo_entitlements)),
     )
+    showcase_writer = None
+    if settings.showcase_database_dsn is not None:
+        showcase_writer = FulfillmentPromiseShowcaseWriter(
+            PostgresFulfillmentShowcaseStore(
+                settings.showcase_database_dsn.get_secret_value(),
+            )
+        )
+    showcase_registry = ShowcaseRegistry(
+        FulfillmentShowcaseProcessor(
+            service,
+            ShowcaseWorkflowIdentity(
+                subject=settings.demo_subject,
+                tenant_id=settings.demo_tenant_id,
+                teams=(settings.demo_team_id,),
+                entitlements=tuple(_csv(settings.demo_entitlements)),
+                team_id=settings.demo_team_id,
+                environment=settings.environment,
+                cost_center="oss",
+            ),
+        )
+    )
     app = create_http_app(
         service=service,
         signing_secret=settings.signing_secret.get_secret_value().encode(),
         authenticator=StaticTokenAuthenticator({token.get_secret_value(): principal}),
+        showcase_registry=showcase_registry,
+        showcase_writer=showcase_writer,
+    )
+    showcase_consumer = KafkaShowcaseConsumer(
+        bootstrap_servers=settings.kafka_bootstrap_servers,
+        topic=settings.showcase_events_topic,
+        group_id=settings.showcase_kafka_group_id,
+        registry=showcase_registry,
     )
     app.router.add_event_handler("startup", store.ensure_schema)
+    app.router.add_event_handler("startup", showcase_consumer.start)
+    app.router.add_event_handler("shutdown", showcase_consumer.stop)
     app.router.add_event_handler("shutdown", client.close)
     return app
 

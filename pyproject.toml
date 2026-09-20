@@ -34,6 +34,8 @@ dependencies = [
 [project.optional-dependencies]
 cdc = ["aiokafka>=0.12,<1"]
 demo = ["sentence-transformers>=5,<6", "torch>=2.9,<3"]
+agent = ["pydantic-ai-slim[openai]>=2.46,<3", "pydantic-deep>=0.3.43,<0.4"]
+showcase = ["asyncpg>=0.30,<1"]
 
 [tool.uv.sources]
 torch = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
@@ -127,6 +129,8 @@ bandit = "bandit -q -r src scripts"
 dependency-audit = "pip-audit --cache-dir .artifacts/pip-audit-cache"
 security = ["bandit", "dependency-audit"]
 eval = "python -m scripts.evaluate"
+ui-install = [{ cmd = "npm ci" }, { cmd = "npm run install:browser" }]
+ui = { cmd = "npm run test:ui" }
 lint = ["format-check", "lint-check", "typecheck", "complexity"]
 verify = ["lint", "unit", "integration", "bdd", "security", "eval"]
 up = "docker compose -f deploy/compose/docker-compose.yml up -d --wait"

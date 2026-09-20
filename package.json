@@ -1,0 +1,17 @@
+{
+  "name": "agentic-context-service-ui-tests",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Browser verification for the Agentic Context Service showcase.",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test:ui": "playwright test",
+    "install:browser": "playwright install chromium"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.63.0"
+  }
+}
