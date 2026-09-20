@@ -28,10 +28,12 @@ This project centralizes the difficult parts:
 
 ## Architecture
 
+**Interactive architecture:** [Open the Archify HTML diagram →](docs/architecture/governed-context-flow.html)
+
 [![Governed Context architecture: source changes flow through CDC into governed OpenSearch retrieval](docs/architecture/governed-context-flow.visual-check.2048x1320.dark.png)](docs/architecture/governed-context-flow.html)
 
-The image is a rendered preview. Open the [interactive Archify diagram](docs/architecture/governed-context-flow.html)
-for guided views, zoom, themes, and export; the [five-minute architecture guide](docs/architecture/README.md)
+The image is a rendered preview. The Archify HTML includes guided views, zoom, themes, and export;
+the [five-minute architecture guide](docs/architecture/README.md)
 explains the design in prose.
 
 The workflow has one retrieval dependency: the Context Service. OpenSearch remains a derived hub;
