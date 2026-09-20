@@ -7,10 +7,10 @@ _SHOWCASE = (
 )
 
 
-def test_showcase_keeps_the_four_observable_lanes() -> None:
+def test_showcase_keeps_the_five_observable_lanes() -> None:
     page = (_SHOWCASE / "index.html").read_text(encoding="utf-8")
 
-    for lane in ("source", "cdc", "agent", "transaction"):
+    for lane in ("source", "cdc", "agent", "human", "transaction"):
         assert f'data-lane="{lane}"' in page
 
     assert 'href="#flow"' in page
@@ -27,6 +27,9 @@ def test_showcase_uses_the_redacted_snapshot_and_sse_contract() -> None:
     assert "public_title" in script
     assert '"transition"' in script
     assert '"tool_name"' in script
+    page = (_SHOWCASE / "index.html").read_text(encoding="utf-8")
+    assert 'data-command="approve"' in page
+    assert 'data-command="reject"' in page
 
 
 def test_showcase_respects_reduced_motion() -> None:

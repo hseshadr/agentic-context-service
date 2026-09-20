@@ -24,6 +24,7 @@ from agentic_context_service.application.showcase_source import (
 )
 from agentic_context_service.application.showcase_workflow import (
     FulfillmentShowcaseProcessor,
+    PydanticDeepProposalProvider,
     ShowcaseWorkflowIdentity,
 )
 from agentic_context_service.config import Settings
@@ -75,6 +76,7 @@ def create_app() -> FastAPI:
                 environment=settings.environment,
                 cost_center="oss",
             ),
+            proposer=_showcase_proposer(settings),
         )
     )
     app = create_http_app(
@@ -102,3 +104,13 @@ def _csv(value: str) -> tuple[str, ...]:
     if not items:
         raise ValueError("ACS_DEMO_ENTITLEMENTS must contain at least one value")
     return items
+
+
+def _showcase_proposer(settings: Settings) -> PydanticDeepProposalProvider | None:
+    if settings.showcase_agent_mode == "deterministic":
+        return None
+    if settings.agent_model is None or settings.openrouter_api_key is None:
+        raise ValueError(
+            "ACS_AGENT_MODEL and OPENROUTER_API_KEY are required for deep showcase mode"
+        )
+    return PydanticDeepProposalProvider(settings.agent_model, settings.openrouter_api_key)

@@ -32,6 +32,11 @@ class Settings(BaseSettings):
     showcase_events_topic: str = "context.showcase.events"
     showcase_kafka_group_id: str = "agentic-context-showcase-v1"
     showcase_database_dsn: SecretStr | None = None
+    showcase_agent_mode: Literal["deterministic", "deep"] = "deterministic"
+    agent_model: str | None = None
+    openrouter_api_key: SecretStr | None = Field(
+        default=None, validation_alias="OPENROUTER_API_KEY", repr=False
+    )
     embedding_model: str = "all-MiniLM-L6-v2"
     signing_secret: SecretStr = Field(default_factory=_missing_signing_secret, min_length=32)
     demo_token: SecretStr | None = None

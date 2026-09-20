@@ -4,12 +4,13 @@ const SAFE_METADATA = new Set([
   "source", "record_id", "source_version", "action", "adapter", "attempt",
   "citation_count", "component", "decision", "document_id", "entity_type", "error_code",
   "event_id", "field_count", "index_alias", "operation", "outcome", "reason_code",
-  "replay", "retryable", "state_from", "state_to", "step", "tool_name", "transition", "workflow",
+  "replay", "retryable", "state_from", "state_to", "step", "tool_name", "transition", "workflow", "expires_in_seconds",
 ]);
 const LANE_TITLES = {
   source: "Source change received",
   cdc: "Governed context projection updated",
   agent: "Agent proposal evaluated",
+  human: "Human approval checkpoint recorded",
   transaction: "Deterministic transaction transition recorded",
 };
 
@@ -31,6 +32,7 @@ const ui = {
 let stream;
 let currentRunId = "";
 let snapshotSequence = 0;
+let awaitingApproval = false;
 
 function text(value, fallback = "—") {
   if (typeof value !== "string" && typeof value !== "number") return fallback;
@@ -57,7 +59,9 @@ function setSignal(state, title, body) {
 }
 
 function setControls(enabled) {
-  ui.commandButtons.forEach((button) => { button.disabled = !enabled; });
+  ui.commandButtons.forEach((button) => {
+    button.disabled = !enabled || (button.dataset.command !== "start" && !awaitingApproval);
+  });
 }
 
 function resetFlow() {
@@ -71,6 +75,7 @@ function resetFlow() {
   }));
   ui.facts.querySelectorAll("dd").forEach((element) => { element.textContent = "—"; });
   ui.runState.textContent = "—";
+  awaitingApproval = false;
 }
 
 function metadata(event) {
@@ -83,7 +88,7 @@ function metadata(event) {
 
 function normalizeEvent(raw) {
   if (!raw || typeof raw !== "object") return null;
-  const lane = ["source", "cdc", "agent", "transaction"].includes(raw.lane) ? raw.lane : null;
+  const lane = ["source", "cdc", "agent", "human", "transaction"].includes(raw.lane) ? raw.lane : null;
   if (!lane) return null;
   const safeMetadata = metadata(raw);
   return {
@@ -144,6 +149,10 @@ function appendEvent(raw, { audit = true } = {}) {
     while (ui.audit.children.length > MAX_AUDIT_EVENTS) ui.audit.lastElementChild.remove();
   }
   updateFacts(event);
+  if (event.lane === "human") {
+    awaitingApproval = event.status === "pending";
+    setControls(Boolean(currentRunId));
+  }
   setSignal("active", "Live trace connected", "Showing only allowlisted, redacted workflow metadata.");
 }
 
@@ -151,6 +160,7 @@ function applySnapshot(snapshot) {
   if (!snapshot || typeof snapshot !== "object") throw new Error("Invalid run snapshot.");
   snapshotSequence = Number.isSafeInteger(snapshot.sequence) ? snapshot.sequence : 0;
   ui.runState.textContent = text(snapshot.status, "connected");
+  awaitingApproval = snapshot.status === "awaiting_approval";
   const events = Array.isArray(snapshot.events) ? snapshot.events : [];
   events.forEach((event) => appendEvent(event));
 }

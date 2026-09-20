@@ -55,7 +55,7 @@ button:disabled { cursor: not-allowed; opacity: .5; filter: none; }
 .signal-mark { display: grid; place-items: center; flex: 0 0 2rem; width: 2rem; height: 2rem; color: #061223; border-radius: 50%; background: var(--gold); font-weight: 900; }
 .signal h2 { font-size: 1rem; }.signal p { margin-top: .2rem; color: var(--muted); font-size: .9rem; line-height: 1.45; }
 .flow { padding: 4.6rem 0 3rem; }.section-heading { display: flex; justify-content: space-between; gap: 1.25rem; align-items: end; margin-bottom: 1.2rem; }.caption { max-width: 50ch; color: var(--muted); font-size: .84rem; line-height: 1.45; text-align: right; }
-.lanes { position: relative; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1rem; }
+.lanes { position: relative; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 1rem; }
 .lanes::before { position: absolute; content: ""; z-index: -1; top: 3.85rem; left: 5%; width: 90%; height: 1px; background: linear-gradient(90deg, var(--blue), var(--teal), var(--gold), var(--violet)); }
 .lane { min-height: 22rem; padding: 1rem; border: 1px solid var(--line); border-radius: 1rem; background: rgba(7, 17, 33, .68); }
 .lane-header { display: flex; gap: .75rem; align-items: flex-start; padding-bottom: 1rem; border-bottom: 1px solid var(--line); }

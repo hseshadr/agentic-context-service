@@ -30,8 +30,14 @@ _MAX_RUN_ID_LENGTH = 120
 _POLL_SECONDS = 0.25
 
 
+class PendingApproval(Protocol):
+    async def resolve(self, action: str, ledger: ShowcaseEventLedger) -> None: ...
+
+
 class ShowcaseProcessor(Protocol):
-    async def process(self, bundle: ShowcaseCdcBundle, ledger: ShowcaseEventLedger) -> None: ...
+    async def process(
+        self, bundle: ShowcaseCdcBundle, ledger: ShowcaseEventLedger
+    ) -> PendingApproval | None: ...
 
 
 class ShowcaseCommand(BaseModel):
@@ -39,7 +45,7 @@ class ShowcaseCommand(BaseModel):
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    action: Literal["start"]
+    action: Literal["start", "approve", "reject"]
 
 
 class ShowcaseUnavailableError(RuntimeError):
@@ -109,6 +115,7 @@ class ShowcaseRegistry:
         self._runs: dict[str, ShowcaseEventLedger] = {}
         self._deliveries: set[str] = set()
         self._processor = processor
+        self._pending: dict[str, PendingApproval] = {}
 
     def get_or_create(self, run_id: str) -> ShowcaseEventLedger:
         ledger = self._runs.get(run_id)
@@ -155,7 +162,9 @@ class ShowcaseRegistry:
         )
         self._deliveries.add(bundle.delivery_id)
         if self._processor is not None:
-            await self._processor.process(bundle, ledger)
+            pending = await self._processor.process(bundle, ledger)
+            if pending is not None:
+                self._pending[bundle.run_id] = pending
 
     async def command(
         self,
@@ -163,6 +172,12 @@ class ShowcaseRegistry:
         command: ShowcaseCommand,
         writer: ShowcaseSourceWriter,
     ) -> dict[str, object]:
+        if command.action != "start":
+            pending = self._pending.pop(run_id, None)
+            if pending is None:
+                raise ShowcaseUnavailableError("no pending human approval for this run")
+            await pending.resolve(command.action, self.get_or_create(run_id))
+            return {"run_id": run_id, "accepted": command.action}
         receipt = await writer.start(run_id)
         return {
             "run_id": run_id,
@@ -268,6 +283,7 @@ def _lane(kind: ShowcaseEventKind) -> str:
         ShowcaseEventKind.PROJECTION_APPLIED: "cdc",
         ShowcaseEventKind.AGENT_TOOL: "agent",
         ShowcaseEventKind.AGENT_DECISION: "agent",
+        ShowcaseEventKind.HUMAN_APPROVAL: "human",
         ShowcaseEventKind.TRANSACTION_TRANSITION: "transaction",
     }[kind]
 
@@ -276,6 +292,8 @@ def _ui_status(status: ShowcaseEventStatus) -> str:
     return {
         ShowcaseEventStatus.FAILED: "failed",
         ShowcaseEventStatus.COMPENSATED: "compensated",
+        ShowcaseEventStatus.REJECTED: "failed",
+        ShowcaseEventStatus.EXPIRED: "failed",
         ShowcaseEventStatus.DECIDED: "proposed",
         ShowcaseEventStatus.APPLIED: "success",
         ShowcaseEventStatus.COMPLETED: "success",
@@ -289,6 +307,7 @@ def _title(event: ShowcaseEvent) -> str:
         ShowcaseEventKind.PROJECTION_APPLIED: "Governed context projection applied",
         ShowcaseEventKind.AGENT_TOOL: "Agent retrieved governed evidence",
         ShowcaseEventKind.AGENT_DECISION: "Agent proposal is awaiting deterministic verification",
+        ShowcaseEventKind.HUMAN_APPROVAL: "Human approval checkpoint recorded",
         ShowcaseEventKind.TRANSACTION_TRANSITION: "Deterministic transaction advanced",
     }[event.kind]
 

@@ -21,7 +21,11 @@ from agentic_context_service.api.request_context import (
     RequestContextSigner,
     StaticTokenAuthenticator,
 )
-from agentic_context_service.api.showcase import KafkaShowcaseConsumer, ShowcaseRegistry
+from agentic_context_service.api.showcase import (
+    KafkaShowcaseConsumer,
+    ShowcaseCommand,
+    ShowcaseRegistry,
+)
 from agentic_context_service.application.showcase_cdc import ShowcaseCdcBundle
 from agentic_context_service.application.showcase_events import ShowcaseSourceVersion
 from agentic_context_service.application.showcase_source import FulfillmentPromiseShowcaseWriter
@@ -71,6 +75,24 @@ class FakeKafkaConsumer:
 
     async def stop(self) -> None:
         self.stopped = True
+
+
+class _PendingApproval:
+    def __init__(self) -> None:
+        self.actions: list[str] = []
+
+    async def resolve(self, action: str, ledger: object) -> None:
+        del ledger
+        self.actions.append(action)
+
+
+class _ApprovalProcessor:
+    def __init__(self) -> None:
+        self.pending = _PendingApproval()
+
+    async def process(self, bundle: ShowcaseCdcBundle, ledger: object) -> _PendingApproval:
+        del bundle, ledger
+        return self.pending
 
 
 def _showcase_bundle() -> ShowcaseCdcBundle:
@@ -192,6 +214,22 @@ async def test_showcase_consumer_projects_safe_bundles_and_skips_invalid_payload
 
     assert fake.commits == 2
     assert registry.get_or_create("demo-retail-001").snapshot().sequence == 3
+
+
+@pytest.mark.asyncio
+async def test_showcase_approval_command_resolves_only_a_pending_checkpoint() -> None:
+    processor = _ApprovalProcessor()
+    registry = ShowcaseRegistry(processor)
+    await registry.apply_cdc_bundle(_showcase_bundle())
+
+    accepted = await registry.command(
+        "demo-retail-001",
+        ShowcaseCommand(action="approve"),
+        FulfillmentPromiseShowcaseWriter(RecordingShowcaseStore()),
+    )
+
+    assert accepted == {"run_id": "demo-retail-001", "accepted": "approve"}
+    assert processor.pending.actions == ["approve"]
 
 
 @pytest.mark.asyncio

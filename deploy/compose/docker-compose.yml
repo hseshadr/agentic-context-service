@@ -219,6 +219,9 @@ services:
       context: ../..
       dockerfile: deploy/containers/Dockerfile
       target: api
+    env_file:
+      - path: ../../.env
+        required: false
     environment:
       ACS_ENVIRONMENT: development
       ACS_OPENSEARCH_URL: http://opensearch:9200
@@ -230,6 +233,8 @@ services:
       ACS_DEMO_TOKEN: demo-retail-token
       ACS_DEMO_ENTITLEMENTS: pricing-analysis,fulfillment-analysis,customer-support,memory-management
       ACS_SIGNING_SECRET: local-showcase-only-change-this-key
+      ACS_SHOWCASE_AGENT_MODE: ${ACS_SHOWCASE_AGENT_MODE:-deterministic}
+      ACS_AGENT_MODEL: ${ACS_AGENT_MODEL:-}
       HOME: /tmp
     ports: ["8080:8080"]
     depends_on:

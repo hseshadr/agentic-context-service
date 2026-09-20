@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 
 const liveCdc = process.env.PLAYWRIGHT_LIVE_CDC === "1";
 
-test("a user can connect to the redacted showcase and start its fixed source demonstration", async ({ page }) => {
+test("a user can observe a bounded proposal and approve its fixed source demonstration", async ({ page }) => {
   const pageErrors = [];
   page.on("pageerror", (error) => pageErrors.push(error.message));
 
@@ -11,6 +11,7 @@ test("a user can connect to the redacted showcase and start its fixed source dem
   await expect(page.locator('[data-lane="source"]')).toBeVisible();
   await expect(page.locator('[data-lane="cdc"]')).toBeVisible();
   await expect(page.locator('[data-lane="agent"]')).toBeVisible();
+  await expect(page.locator('[data-lane="human"]')).toBeVisible();
   await expect(page.locator('[data-lane="transaction"]')).toBeVisible();
 
   if (liveCdc) {
@@ -24,6 +25,9 @@ test("a user can connect to the redacted showcase and start its fixed source dem
     await expect(page.locator('[data-events="source"]')).toContainText("source_changed");
     await expect(page.locator('[data-events="cdc"]')).toContainText("projection_applied");
     await expect(page.locator('[data-events="agent"]')).toContainText("agent_decision");
+    await expect(page.locator('[data-events="human"]')).toContainText("human_approval");
+    await expect(page.getByRole("button", { name: "Approve proposal" })).toBeEnabled();
+    await page.getByRole("button", { name: "Approve proposal" }).click();
     await expect(page.locator('[data-events="transaction"]')).toContainText("reserve_carrier");
   }
   await expect(page.locator("body")).not.toContainText("agentic-saga");

@@ -59,16 +59,18 @@ tests and `make demo` are required for live CDC claims.
 ## Showcase boundary
 
 The dashboard at `/showcase/` is an observation surface: it serves redacted snapshots and SSE
-events and has no authority to execute arbitrary business work. Its sole local control starts one
-fixed, idempotent fulfillment-promise source update. The indexer publishes the display-safe bundle
+events and has no authority to execute arbitrary business work. Its fixed local controls start one
+idempotent fulfillment-promise source update or resolve a pending approval for its exact source
+version. The indexer publishes the display-safe bundle
 only after OpenSearch acknowledges the correlated projection, and the API then renders the ordered
 `source_changed → cdc_received → projection_applied` trace. It then retrieves the matching typed
-fulfillment fact through the same governed API, records a bounded `reserve`/`decline` proposal, and
-shows deterministic reservation transitions. The local demo transaction adapter is deliberately a
+fulfillment fact through the same governed API, records a bounded `reserve`/`decline` proposal,
+then stops at a five-minute human approval checkpoint before showing deterministic reservation
+transitions. The local demo transaction adapter is deliberately a
 no-op: it demonstrates authority and compensation sequencing without creating an order. The browser
 proof uses the same route; the live Compose proof is documented in the README.
 
 The optional [fulfillment agent example](../../examples/fulfillment-agent/README.md) makes the
 boundary explicit. Pydantic Deep may make a proposal using two read-only tools; deterministic fact
-validation and the transaction adapter retain all decision and side-effect authority. There is no
-human-in-the-loop path in this showcase.
+validation and the transaction adapter retain all decision and side-effect authority. The Deep
+Agent is opt-in; incomplete read-only tool use or provider failure fails closed.

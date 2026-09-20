@@ -89,12 +89,17 @@ library or CDC check does not download a browser. The repository CI runs it for 
 and push to `main`.
 
 To exercise the same browser flow against the running Compose stack—including the fixed,
-idempotent fulfillment-promise mutation, its CDC projection, governed fulfillment retrieval, and
-the bounded decision/transaction trace—run:
+idempotent fulfillment-promise mutation, its CDC projection, governed fulfillment retrieval,
+bounded proposal, explicit human approval, and deterministic transaction trace—run:
 
 ```bash
 PLAYWRIGHT_BASE_URL=http://127.0.0.1:8080 PLAYWRIGHT_LIVE_CDC=1 make ui
 ```
+
+The default is deterministic and offline. To prove the optional bounded Deep Agent locally, set
+`ACS_SHOWCASE_AGENT_MODE=deep`, set `ACS_AGENT_MODEL` to an `openrouter:` model identifier, and
+place only your `OPENROUTER_API_KEY` in ignored `.env`. The provider is limited to two read-only
+governed-evidence tools; a missing tool call or provider failure fails closed and cannot reserve.
 
 The local demo transaction adapter is intentionally a no-op; it never creates a real order. Its
 small fulfillment workflow documents the forward and compensating operations separately in

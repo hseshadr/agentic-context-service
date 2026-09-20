@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, cast
 
 import pytest
+from pydantic import SecretStr
 
 from agentic_context_service.application.showcase_cdc import ShowcaseCdcBundle
 from agentic_context_service.application.showcase_events import (
@@ -15,6 +16,8 @@ from agentic_context_service.application.showcase_events import (
 from agentic_context_service.application.showcase_workflow import (
     DemoReservationTools,
     FulfillmentShowcaseProcessor,
+    ProposalAction,
+    PydanticDeepProposalProvider,
     ShowcaseWorkflowIdentity,
 )
 
@@ -61,6 +64,12 @@ class _Tools:
         self.calls.append("release_inventory")
         if self.fail_release:
             raise RuntimeError("inventory unavailable")
+
+
+class _FailingProposer:
+    async def propose(self, bundle: ShowcaseCdcBundle, facts: tuple[dict[str, Any], ...]) -> object:
+        del bundle, facts
+        raise RuntimeError("provider unavailable")
 
 
 def _bundle() -> ShowcaseCdcBundle:
@@ -145,25 +154,26 @@ def _projected_ledger() -> ShowcaseEventLedger:
 
 
 @pytest.mark.asyncio
-async def test_processor_reads_governed_typed_facts_then_completes_reservations() -> None:
+async def test_processor_stops_at_human_approval_before_reservations() -> None:
     service = _ContextService(_response())
     tools = _Tools()
     ledger = _projected_ledger()
 
-    await _processor(service, tools).process(_bundle(), ledger)
+    pending = await _processor(service, tools).process(_bundle(), ledger)
 
     assert service.calls[0][0] == "context.retrieve"
     assert service.calls[0][1]["purpose"] == "fulfillment-analysis"
     assert service.calls[0][1]["filters"]["record_id"] == ["NORTHSTAR-104"]
-    assert tools.calls == ["reserve_inventory", "reserve_carrier"]
-    assert [event.kind for event in ledger.snapshot().events][-6:] == [
+    assert pending is not None
+    assert tools.calls == []
+    assert [event.kind for event in ledger.snapshot().events][-4:] == [
+        ShowcaseEventKind.AGENT_TOOL,
         ShowcaseEventKind.AGENT_TOOL,
         ShowcaseEventKind.AGENT_DECISION,
-        ShowcaseEventKind.TRANSACTION_TRANSITION,
-        ShowcaseEventKind.TRANSACTION_TRANSITION,
-        ShowcaseEventKind.TRANSACTION_TRANSITION,
-        ShowcaseEventKind.TRANSACTION_TRANSITION,
+        ShowcaseEventKind.HUMAN_APPROVAL,
     ]
+    await pending.resolve("approve", ledger)
+    assert tools.calls == ["reserve_inventory", "reserve_carrier"]
 
 
 @pytest.mark.asyncio
@@ -171,7 +181,9 @@ async def test_processor_compensates_inventory_when_the_carrier_adapter_fails() 
     tools = _Tools(fail_carrier=True)
     ledger = _projected_ledger()
 
-    await _processor(_ContextService(_response()), tools).process(_bundle(), ledger)
+    pending = await _processor(_ContextService(_response()), tools).process(_bundle(), ledger)
+    assert pending is not None
+    await pending.resolve("approve", ledger)
 
     assert tools.calls == ["reserve_inventory", "reserve_carrier", "release_inventory"]
     transitions = [
@@ -210,7 +222,9 @@ async def test_processor_records_a_failed_compensation_when_release_fails() -> N
     tools = _Tools(fail_carrier=True, fail_release=True)
     ledger = _projected_ledger()
 
-    await _processor(_ContextService(_response()), tools).process(_bundle(), ledger)
+    pending = await _processor(_ContextService(_response()), tools).process(_bundle(), ledger)
+    assert pending is not None
+    await pending.resolve("approve", ledger)
 
     assert tools.calls == ["reserve_inventory", "reserve_carrier", "release_inventory"]
     assert ledger.snapshot().events[-1].status is ShowcaseEventStatus.FAILED
@@ -223,3 +237,94 @@ async def test_demo_tools_are_no_op_and_never_require_business_credentials() -> 
     await tools.reserve_inventory("NORTHSTAR-104", 1)
     await tools.reserve_carrier("NORTHSTAR-104", 1)
     await tools.release_inventory("NORTHSTAR-104", 1)
+
+
+@pytest.mark.asyncio
+async def test_rejection_records_the_human_checkpoint_without_side_effects() -> None:
+    tools = _Tools()
+    ledger = _projected_ledger()
+
+    pending = await _processor(_ContextService(_response()), tools).process(_bundle(), ledger)
+
+    assert pending is not None
+    await pending.resolve("reject", ledger)
+    assert tools.calls == []
+    assert ledger.snapshot().status.value == "rejected"
+
+
+@pytest.mark.asyncio
+async def test_provider_failure_fails_closed_before_human_or_transaction_work() -> None:
+    tools = _Tools()
+    processor = FulfillmentShowcaseProcessor(
+        _ContextService(_response()),
+        _processor(_ContextService(_response()), tools)._identity,
+        tools=tools,
+        proposer=_FailingProposer(),  # type: ignore[arg-type]
+    )
+    ledger = _projected_ledger()
+
+    assert await processor.process(_bundle(), ledger) is None
+    assert tools.calls == []
+    assert ledger.snapshot().events[-2].details["reason_code"] == "agent_unavailable"
+
+
+@pytest.mark.asyncio
+async def test_expired_approval_never_executes_a_transaction() -> None:
+    now = datetime(2026, 9, 19, 12, tzinfo=UTC)
+
+    def clock() -> datetime:
+        return now
+
+    tools = _Tools()
+    processor = FulfillmentShowcaseProcessor(
+        _ContextService(_response()),
+        _processor(_ContextService(_response()), tools)._identity,
+        tools=tools,
+        clock=clock,
+    )
+    ledger = _projected_ledger()
+    pending = await processor.process(_bundle(), ledger)
+
+    assert pending is not None
+    now = datetime(2026, 9, 19, 13, tzinfo=UTC)
+    await pending.resolve("approve", ledger)
+    assert tools.calls == []
+    assert ledger.snapshot().status.value == "failed"
+
+
+@pytest.mark.asyncio
+async def test_deep_provider_limits_the_agent_to_two_read_only_governed_tools() -> None:
+    captured: dict[str, object] = {}
+
+    class _Result:
+        def __init__(self) -> None:
+            self.output = {"action": "reserve", "reason_code": "verified_fulfillment_promise"}
+
+    class _Agent:
+        async def run(self, task: str) -> _Result:
+            assert "NORTHSTAR-104" in task
+            tools = cast(tuple[Any, ...], captured["tools"])
+            for tool in tools:
+                await tool()
+            return _Result()
+
+    def factory(**kwargs: object) -> Any:
+        captured.update(kwargs)
+        return _Agent()
+
+    provider = PydanticDeepProposalProvider(
+        "openrouter:meta-llama/llama-3.3-70b-instruct", SecretStr("not-a-real-key"), factory=factory
+    )
+    result = await provider.propose(
+        _bundle(), (_response()["results"][0]["source_facts"] | {"age_seconds": 2},)
+    )
+
+    assert result.proposal.action is ProposalAction.RESERVE
+    assert set(result.tools_used) == {
+        "get_governed_fulfillment_context",
+        "verify_context_freshness",
+    }
+    assert captured["include_filesystem"] is False
+    assert captured["include_subagents"] is False
+    assert captured["include_memory"] is False
+    assert captured["web_fetch"] is False

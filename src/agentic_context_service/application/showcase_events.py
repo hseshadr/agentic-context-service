@@ -25,6 +25,7 @@ _DISPLAY_SAFE_DETAIL_KEYS = frozenset(
         "error_code",
         "event_id",
         "field_count",
+        "expires_in_seconds",
         "index_alias",
         "operation",
         "outcome",
@@ -59,6 +60,7 @@ class ShowcaseEventKind(StrEnum):
     PROJECTION_APPLIED = "projection_applied"
     AGENT_TOOL = "agent_tool"
     AGENT_DECISION = "agent_decision"
+    HUMAN_APPROVAL = "human_approval"
     TRANSACTION_TRANSITION = "transaction_transition"
 
 
@@ -72,6 +74,10 @@ class ShowcaseEventStatus(StrEnum):
     FAILED = "failed"
     COMPENSATING = "compensating"
     COMPENSATED = "compensated"
+    REQUESTED = "requested"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+    EXPIRED = "expired"
 
 
 class ShowcaseRunStatus(StrEnum):
@@ -80,6 +86,8 @@ class ShowcaseRunStatus(StrEnum):
     FAILED = "failed"
     COMPENSATING = "compensating"
     COMPENSATED = "compensated"
+    AWAITING_APPROVAL = "awaiting_approval"
+    REJECTED = "rejected"
 
 
 @dataclass(frozen=True, slots=True)
@@ -208,6 +216,13 @@ class ShowcaseEventLedger:
             sequence=self._sequence,
             status=self._status,
             events=self.events_after(after_sequence),
+        )
+
+    def is_current_projection(self, source: ShowcaseSourceVersion) -> bool:
+        """Whether this exact source version remains the latest searchable version."""
+        return (
+            self._latest_source_versions.get(source.identity) == source.version
+            and source.key in self._projected
         )
 
     @classmethod
@@ -366,6 +381,13 @@ def _source_required(event: ShowcaseEvent) -> ShowcaseSourceVersion:
 
 
 def _status_after(current: ShowcaseRunStatus, event: ShowcaseEvent) -> ShowcaseRunStatus:
+    if event.kind is ShowcaseEventKind.HUMAN_APPROVAL:
+        return {
+            ShowcaseEventStatus.REQUESTED: ShowcaseRunStatus.AWAITING_APPROVAL,
+            ShowcaseEventStatus.APPROVED: ShowcaseRunStatus.RUNNING,
+            ShowcaseEventStatus.REJECTED: ShowcaseRunStatus.REJECTED,
+            ShowcaseEventStatus.EXPIRED: ShowcaseRunStatus.FAILED,
+        }.get(event.status, current)
     if event.kind is not ShowcaseEventKind.TRANSACTION_TRANSITION:
         return current
     return {

@@ -14,7 +14,7 @@
       <div>
         <p class="eyebrow">Agentic Context Service · observable showcase</p>
         <h1>Watch a decision earn its evidence.</h1>
-        <p class="lede">A redacted, real-time view of source changes, governed context, agent proposals, and deterministic execution.</p>
+        <p class="lede">A redacted, real-time view of source changes, governed context, bounded agent proposals, human approval, and deterministic execution.</p>
       </div>
       <div class="connection" aria-live="polite">
         <span class="status-dot" data-status-dot></span>
@@ -35,6 +35,8 @@
         </form>
         <div class="run-actions" aria-label="Workflow controls">
           <button type="button" class="secondary" data-command="start">Start run</button>
+          <button type="button" class="secondary" data-command="approve">Approve proposal</button>
+          <button type="button" class="secondary" data-command="reject">Reject proposal</button>
         </div>
         <p class="control-note" id="control-note">Connect to a run to enable the fixed fulfillment-promise demonstration. This screen never accepts arbitrary business input.</p>
       </section>
@@ -51,7 +53,7 @@
         <div class="section-heading">
           <div>
             <p class="eyebrow">The evidence path</p>
-            <h2 id="flow-title">Four lanes, one accountable outcome</h2>
+            <h2 id="flow-title">Five lanes, one accountable outcome</h2>
           </div>
           <p class="run-state" data-run-state>—</p>
         </div>
@@ -87,9 +89,19 @@
             </ol>
           </section>
 
-          <section class="lane transaction-lane" data-lane="transaction" aria-labelledby="transaction-title">
+          <section class="lane human-lane" data-lane="human" aria-labelledby="human-title">
             <div class="lane-header">
               <span class="lane-number">04</span>
+              <div><p class="eyebrow">Human checkpoint</p><h3 id="human-title">A person accepts or rejects</h3></div>
+            </div>
+            <ol class="event-list" data-events="human">
+              <li class="empty-event">Waiting for an approval checkpoint.</li>
+            </ol>
+          </section>
+
+          <section class="lane transaction-lane" data-lane="transaction" aria-labelledby="transaction-title">
+            <div class="lane-header">
+              <span class="lane-number">05</span>
               <div><p class="eyebrow">Transaction authority</p><h3 id="transaction-title">Work commits or compensates</h3></div>
             </div>
             <ol class="event-list" data-events="transaction">
