@@ -3,7 +3,7 @@
 For teams building AI assistants: one lookup service for company facts that checks permissions and cites every source.
 
 [![CI](https://github.com/hseshadr/agentic-context-service/actions/workflows/dagger.yml/badge.svg)](https://github.com/hseshadr/agentic-context-service/actions/workflows/dagger.yml)
-[![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
 [Docs](docs/architecture/README.md) · [Quickstart](#try-it-in-60-seconds)
 
@@ -125,7 +125,7 @@ IDs, telemetry, and audit sinks are adapters assembled in explicit composition r
 | --- | --- | --- |
 | Each assistant queries databases directly | You have one assistant and one data source | One place for access rules, citations, and freshness instead of one copy per assistant |
 | A vector database with a retrieval library | You only need semantic search over documents | Permission filtering before ranking, exact plus semantic matching, change-data sync with replay and deletion semantics |
-| A hosted enterprise search product | You want a managed service and accept its data handling | Self-hosted, source-available contracts you can read and test |
+| A hosted enterprise search product | You want a managed service and accept its data handling | Self-hosted, open-source (MIT) contracts you can read and test |
 | Do nothing | Assistants never touch sensitive or fast-changing data | Auditable answers when they do |
 
 ## Security and trust model
@@ -301,4 +301,4 @@ make verify
 
 ## License / Citation
 
-Apache-2.0 — see [LICENSE](LICENSE).
+MIT — see [LICENSE](LICENSE).

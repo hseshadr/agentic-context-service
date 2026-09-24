@@ -7,8 +7,8 @@ info:
     A vendor-neutral workflow boundary. The API accepts intent and policy-narrowing filters;
     it never accepts OpenSearch DSL. Authorization is evaluated before candidate retrieval.
   license:
-    name: Apache-2.0
-    identifier: Apache-2.0
+    name: MIT
+    identifier: MIT
 servers:
   - url: http://localhost:8080
     description: Local showcase

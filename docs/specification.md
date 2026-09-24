@@ -2,7 +2,7 @@
 
 Status: v1 implementation contract
 Working project name: **Agentic Context Service**
-License: Apache-2.0
+License: MIT
 
 ## 0. Execution contract
 
@@ -17,7 +17,7 @@ OpenSearch client, PostgreSQL 17, Debezium PostgreSQL connector, Redpanda's Kafk
 and checked-in Rego, deterministic fake embeddings in tests, `all-MiniLM-L6-v2` in the demo, a
 no-op reranker, OpenTelemetry OTLP, Prometheus, pytest/pytest-asyncio/pytest-bdd, Testcontainers
 where useful, Ruff, strict mypy, Bandit, pip-audit, Poe tasks behind thin Make targets, OpenAPI
-3.1, JSON Schema 2020-12, Docker Compose v2, and Apache-2.0.
+3.1, JSON Schema 2020-12, Docker Compose v2, and MIT.
 
 The implementation uses hexagonal boundaries (`domain`, `application`, `ports`, `adapters`,
 `api`, and `config/wiring`). Vendor SDK types never cross inward boundaries. Swappable behavior is

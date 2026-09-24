@@ -10,5 +10,5 @@ Thank you for improving Agentic Context Service.
    identifiers.
 
 Commits should be small, reviewable, and conventionally named. By contributing, you agree that
-your work is licensed under Apache-2.0. See `SECURITY.md` for private vulnerability reporting and
+your work is licensed under MIT. See `SECURITY.md` for private vulnerability reporting and
 `CODE_OF_CONDUCT.md` for community expectations.

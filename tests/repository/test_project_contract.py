@@ -138,3 +138,18 @@ def test_personal_project_has_no_gap_inc_reference() -> None:
         if prohibited in path.read_text(errors="ignore").lower()
     ]
     assert not offenders, f"personal project contains prohibited employer reference: {offenders}"
+
+
+def test_project_is_mit_licensed_everywhere_it_states_its_license() -> None:
+    license_text = (ROOT / "LICENSE").read_text()
+    assert license_text.startswith("MIT License\n\nCopyright (c) 2026 Harish Seshadri\n")
+    pyproject = (ROOT / "pyproject.toml").read_text()
+    assert 'license = "MIT"' in pyproject
+    assert "License :: OSI Approved :: MIT License" in pyproject
+    openapi = yaml.safe_load((ROOT / "packages/contracts/openapi.yaml").read_text())
+    assert openapi["info"]["license"] == {"name": "MIT", "identifier": "MIT"}
+    assert "License: MIT" in (ROOT / "docs/specification.md").read_text()
+    assert "license-MIT" in (ROOT / "README.md").read_text()
+    own_docs = ("README.md", "CONTRIBUTING.md", "THIRD_PARTY_NOTICES.md", "docs/specification.md")
+    for path in (*own_docs, "pyproject.toml", "packages/contracts/openapi.yaml"):
+        assert "apache" not in (ROOT / path).read_text().lower(), path
