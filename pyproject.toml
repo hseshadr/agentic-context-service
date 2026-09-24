@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "agentic-context-service"
 version = "0.1.0"
-description = "A governed context and memory hub for agentic workflows."
+description = "For teams building AI assistants: one lookup service for company facts that checks permissions and cites every source."
 readme = "README.md"
 requires-python = ">=3.13,<3.14"
 license = "Apache-2.0"
