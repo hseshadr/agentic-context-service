@@ -97,8 +97,23 @@ def _dependencies(source: dagger.Directory) -> dagger.Container:
 
 def _project(source: dagger.Directory) -> dagger.Container:
     complete = _dependencies(source).with_directory(SOURCE_ROOT, source).with_workdir(SOURCE_ROOT)
+    # `_dependencies` syncs with --no-install-project, so the project itself is built
+    # here. Build isolation would re-resolve `build-system.requires` against index
+    # metadata the lockfile path never cached, which --offline cannot reach:
+    # "hatchling was not found in the cache". hatchling is already installed from
+    # uv.lock, so skip isolation. A wheel rather than an editable install then avoids
+    # `editables`, which uv.lock does not carry at all.
     return complete.with_exec(
-        ["uv", "sync", "--frozen", "--all-groups", "--all-extras", "--offline"]
+        [
+            "uv",
+            "sync",
+            "--frozen",
+            "--all-groups",
+            "--all-extras",
+            "--offline",
+            "--no-build-isolation",
+            "--no-editable",
+        ]
     )
 
 
