@@ -14,11 +14,28 @@ jobs:
           fetch-depth: 0
           ref: ${{ github.sha }}
           persist-credentials: false
-      - uses: dagger/dagger-for-github@27b130bf0f79a7f6fbbbe0fbca6760dc9bb40a77 # v8.4.1
+      # The build re-clones this repo to prove the checked-out tree matches
+      # --commit-sha, and `persist-credentials: false` deliberately leaves the
+      # runner with no git credential. This run's own GITHUB_TOKEN already
+      # carries `contents: read` on exactly this repository (see the top-level
+      # permissions), so it is the right credential: scoped to one repo, expires
+      # with the job, nothing stored, nothing to rotate. A fine-grained PAT in a
+      # repo secret would be strictly weaker — long-lived and hand-managed.
+      - name: Derive the git auth header from this run's own token
+        id: gitauth
+        if: >-
+          github.event.repository.private && (github.event_name != 'pull_request' ||
+          github.event.pull_request.head.repo.full_name == github.repository)
         env:
-          DAGGER_GIT_HTTP_AUTH_HEADER: ${{ github.event.repository.private && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && secrets.DAGGER_GIT_HTTP_AUTH_HEADER != '' && secrets.DAGGER_GIT_HTTP_AUTH_HEADER || '' }}
+          RUN_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          header="Basic $(printf 'x-access-token:%s' "$RUN_TOKEN" | base64 | tr -d '\n')"
+          echo "::add-mask::$header"
+          echo "DAGGER_GIT_HTTP_AUTH_HEADER=$header" >> "$GITHUB_ENV"
+          echo "enabled=true" >> "$GITHUB_OUTPUT"
+      - uses: dagger/dagger-for-github@27b130bf0f79a7f6fbbbe0fbca6760dc9bb40a77 # v8.4.1
         with:
           version: "0.21.8"
           verb: call
           args: >-
-            ci --source=. --commit-sha=${{ github.sha }} ${{ github.event.repository.private && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && secrets.DAGGER_GIT_HTTP_AUTH_HEADER != '' && '--git-auth-header=env:DAGGER_GIT_HTTP_AUTH_HEADER' || '' }}
+            ci --source=. --commit-sha=${{ github.sha }} ${{ steps.gitauth.outputs.enabled == 'true' && '--git-auth-header=env:DAGGER_GIT_HTTP_AUTH_HEADER' || '' }}
