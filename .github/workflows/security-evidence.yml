@@ -1,6 +1,8 @@
 name: Security evidence
 on: {pull_request: null, push: {branches: [main]}, workflow_dispatch: null}
-permissions: {contents: read}
+# pull-requests: read lets gitleaks-action list a PR's commits on pull_request
+# events; without it the scan 403s before running (push runs were unaffected).
+permissions: {contents: read, pull-requests: read}
 jobs:
   evidence:
     runs-on: ubuntu-latest

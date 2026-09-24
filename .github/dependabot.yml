@@ -1,6 +1,8 @@
 version: 2
 updates:
-  - package-ecosystem: pip
+  # uv, not pip: the pip ecosystem widened pyproject ranges without relocking
+  # uv.lock, so bumps were never installed or tested under `uv sync --frozen`.
+  - package-ecosystem: uv
     directory: /
     schedule: {interval: weekly}
     groups:
@@ -13,5 +15,10 @@ updates:
   - package-ecosystem: docker
     directory: /deploy/containers
     schedule: {interval: weekly}
+    # requires-python is >=3.13,<3.14, so the runtime image stays on 3.13.x:
+    # take patch releases, never a new Python minor or major.
+    ignore:
+      - dependency-name: python
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
     groups:
       container-base: {patterns: ["*"]}
