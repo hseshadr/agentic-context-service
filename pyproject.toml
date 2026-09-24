@@ -33,7 +33,7 @@ dependencies = [
 
 [project.optional-dependencies]
 cdc = ["aiokafka>=0.12,<1"]
-demo = ["sentence-transformers>=5,<6", "torch>=2.9,<3"]
+demo = ["sentence-transformers>=5,<7", "torch>=2.9,<3"]
 agent = ["pydantic-ai-slim[openai]>=2.46,<3", "pydantic-deep>=0.3.43,<0.4"]
 showcase = ["asyncpg>=0.30,<1"]
 
@@ -58,7 +58,7 @@ dev = [
   "bandit>=1.8,<2",
   "hatchling>=1.27,<2",
   "hypothesis>=6.138,<7",
-  "mypy>=1.17,<2",
+  "mypy>=1.17,<3",
   "openapi-spec-validator>=0.7,<1",
   "pip-audit>=2.9,<3",
   "poethepoet>=0.37,<1",
