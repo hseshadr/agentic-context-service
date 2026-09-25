@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ast
+import json
 import re
 from pathlib import Path
 
@@ -153,3 +154,17 @@ def test_project_is_mit_licensed_everywhere_it_states_its_license() -> None:
     own_docs = ("README.md", "CONTRIBUTING.md", "THIRD_PARTY_NOTICES.md", "docs/specification.md")
     for path in (*own_docs, "pyproject.toml", "packages/contracts/openapi.yaml"):
         assert "apache" not in (ROOT / path).read_text().lower(), path
+
+
+# hseshadr/ci main after #46 (dd19871: greenMain tolerates GitHub's rerun
+# created_at skew). A pin below it blocks releases whenever main CI is re-run.
+CI_MODULE_PIN = "9d491851fc5c65ad4a388ed2dd7bb4def4e1f007"
+
+
+def test_ci_modules_pinned_to_reviewed_commit() -> None:
+    deps = json.loads((ROOT / "dagger.json").read_text())["dependencies"]
+    ci_deps = {d["name"]: d for d in deps if "github.com/hseshadr/ci/" in d["source"]}
+    assert set(ci_deps) == {"foundation", "python-package"}
+    for dep in ci_deps.values():
+        assert dep["source"].endswith(f"@{CI_MODULE_PIN}"), dep
+        assert dep["pin"] == CI_MODULE_PIN, dep
