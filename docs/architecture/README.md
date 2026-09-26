@@ -68,7 +68,7 @@ fulfillment fact through the same governed API, records a bounded `reserve`/`dec
 then stops at a five-minute human approval checkpoint before showing deterministic reservation
 transitions. The local demo transaction adapter is deliberately a
 no-op: it demonstrates authority and compensation sequencing without creating an order. The browser
-proof uses the same route; the live Compose proof is documented in the README.
+proof uses the same route; the live Compose proof is documented in [ARCHITECTURE.md](../ARCHITECTURE.md#browser-test).
 
 The optional [fulfillment agent example](../../examples/fulfillment-agent/README.md) makes the
 boundary explicit. Pydantic Deep may make a proposal using two read-only tools; deterministic fact

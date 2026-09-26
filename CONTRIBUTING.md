@@ -4,7 +4,8 @@ Thank you for improving Agentic Context Service.
 
 1. Open an issue for substantial public-contract or architecture changes.
 2. Keep changes focused and add a failing test before behavior changes.
-3. Run `make bootstrap`, then the focused test and `make verify`.
+3. Run `make bootstrap`, then the focused test and `make verify`. [Getting started](docs/GETTING_STARTED.md)
+   walks through setup, the code map, and a first change.
 4. Update OpenAPI/JSON Schema, docs, and an ADR when a consequential decision changes.
 5. Use synthetic fixtures only. Never submit credentials, tokens, production data, or customer
    identifiers.
