@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "agentic-context-service"
 version = "0.1.0"
-description = "For teams building AI assistants: one lookup service for company facts that checks permissions and cites every source."
+description = "A lookup service for your company's AI assistants: each one gets only the facts it may see, with the source of each."
 readme = "README.md"
 requires-python = ">=3.13,<3.14"
 license = "MIT"
